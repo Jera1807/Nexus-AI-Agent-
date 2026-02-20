@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import fields
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,12 @@ class TenantConfigError(ValueError):
     """Raised when tenant.yaml is malformed for the Tenant model."""
 
 
+class TenantIdError(ValueError):
+    """Raised when tenant_id is malformed or unsafe."""
+
+
 LIST_MERGE_KEYS = {"scopes", "allowed_channels", "keywords"}
+TENANT_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 class TenantManager:
@@ -56,7 +62,13 @@ class TenantManager:
         )
 
     def load_tenant_config(self, tenant_id: str) -> TenantConfig:
-        tenant_root = self.tenants_root / tenant_id
+        self._validate_tenant_id(tenant_id)
+
+        tenant_root = (self.tenants_root / tenant_id).resolve()
+        tenants_root_resolved = self.tenants_root.resolve()
+        if tenants_root_resolved not in tenant_root.parents and tenant_root != tenants_root_resolved:
+            raise TenantIdError(f"Unsafe tenant_id path resolution for '{tenant_id}'")
+
         if not tenant_root.exists():
             raise TenantNotFoundError(f"Tenant '{tenant_id}' not found in {self.tenants_root}")
 
@@ -75,6 +87,12 @@ class TenantManager:
             channels=channels,
             prompt_template=prompt_template,
         )
+
+    def _validate_tenant_id(self, tenant_id: str) -> None:
+        if not tenant_id or not TENANT_ID_PATTERN.fullmatch(tenant_id):
+            raise TenantIdError(
+                "tenant_id may only contain letters, numbers, underscores, and hyphens"
+            )
 
     def _validate_tenant_data(self, tenant_id: str, tenant_data: dict[str, Any]) -> Tenant:
         expected = {f.name for f in fields(Tenant)}

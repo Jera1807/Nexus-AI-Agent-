@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from src.tenant.manager import TenantConfigError, TenantManager, TenantNotFoundError
+from src.tenant.manager import TenantConfigError, TenantIdError, TenantManager, TenantNotFoundError
 from src.tenant.models import TenantConfig, TenantContext, TenantMembership
 
 
@@ -69,3 +69,17 @@ def test_invalid_tenant_yaml_raises_config_error(tmp_path: Path):
 
     with pytest.raises(TenantConfigError):
         manager.load_tenant_config("broken")
+
+
+def test_invalid_tenant_id_rejected(project_root: Path):
+    manager = TenantManager(config_root=project_root / "configs")
+
+    with pytest.raises(TenantIdError):
+        manager.load_tenant_config("../etc/passwd")
+
+
+def test_tenant_id_with_invalid_chars_rejected(project_root: Path):
+    manager = TenantManager(config_root=project_root / "configs")
+
+    with pytest.raises(TenantIdError):
+        manager.load_tenant_config("example tenant")
