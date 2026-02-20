@@ -1,0 +1,7 @@
+{
+  "channels": {
+    "web": {"enabled": true, "ki_disclosure": true},
+    "telegram": {"enabled": true, "ki_disclosure": true},
+    "whatsapp": {"enabled": false, "ki_disclosure": true}
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "tenant_id": "example_tenant",
+  "business_name": "Beauty & Nailschool Bochum",
+  "language": "de",
+  "timezone": "Europe/Berlin",
+  "active_channels": ["web", "telegram"]
+}
