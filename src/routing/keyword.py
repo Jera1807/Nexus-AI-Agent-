@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
 
 from src.routing.models import RiskLevel, RoutingDecision, Tier
@@ -8,6 +9,7 @@ from src.routing.models import RiskLevel, RoutingDecision, Tier
 WORD_BOUNDARY_TEMPLATE = r"(?<!\w){token}(?!\w)"
 
 
+@lru_cache(maxsize=1024)
 def _compile_keyword_pattern(keyword: str) -> re.Pattern[str]:
     escaped = re.escape(keyword.strip().lower())
     if not escaped:
@@ -29,11 +31,12 @@ def keyword_route(message: str, intents_config: dict[str, Any]) -> RoutingDecisi
         if not keywords:
             continue
 
-        matches = sum(1 for keyword in keywords if _compile_keyword_pattern(keyword).search(text))
+        patterns = [_compile_keyword_pattern(str(keyword)) for keyword in keywords]
+        matches = sum(1 for pattern in patterns if pattern.search(text))
         if matches == 0:
             continue
 
-        score = matches / len(keywords)
+        score = matches / len(patterns)
         if score > best_score:
             best_score = score
             best_intent = intent_name

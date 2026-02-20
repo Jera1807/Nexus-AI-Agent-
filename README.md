@@ -29,9 +29,13 @@ Multi-tenant AI-Agent Framework für den produktiven Einsatz bei KMU.
 
 - Session 0 (Scaffold): **100%**
 - Session 1 (Tenant Foundation): **~55%** (Config-Loading + Vererbung + TenantContext umgesetzt)
-- Session 2+ (Routing, Memory, Grounding, Tools, Channels, Observability, Evals): **~5–10%**
+- Session 2 (Routing Core: keyword + semantic + confidence + fallback): **~45%**
+- Session 3 (Memory Core: working + summary + semantic + context budget): **~35%**
+- Session 4 (Grounding Core: citations + validator + repair + entity registry): **~30%**
+- Session 5 (Tools Core: registry + trimming + firewall + permissions): **~30%**
+- Session 6+ (Channels, Observability, Evals): **~5%**
 
-Gesamtfortschritt über Sessions 0–8: **ca. 20–25%**.
+Gesamtfortschritt über Sessions 0–8: **ca. 52%**.
 
 ## Wie lege ich einen neuen Tenant an?
 

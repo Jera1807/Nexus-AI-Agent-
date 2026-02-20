@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from src.tenant.manager import TenantManager, TenantNotFoundError
+from src.tenant.manager import TenantConfigError, TenantIdError, TenantManager, TenantNotFoundError
 from src.tenant.models import TenantConfig, TenantContext, TenantMembership
 
 
@@ -41,3 +41,45 @@ def test_missing_tenant_raises(project_root: Path):
 
     with pytest.raises(TenantNotFoundError):
         manager.load_tenant_config("does_not_exist")
+
+
+def test_deep_merge_additive_lists_for_known_keys(project_root: Path):
+    manager = TenantManager(config_root=project_root / "configs")
+    merged = manager._deep_merge(  # noqa: SLF001
+        {"scopes": ["read:kb"], "other": ["a"]},
+        {"scopes": ["write:handoff"], "other": ["b"]},
+    )
+
+    assert merged["scopes"] == ["read:kb", "write:handoff"]
+    assert merged["other"] == ["b"]
+
+
+def test_invalid_tenant_yaml_raises_config_error(tmp_path: Path):
+    config_root = tmp_path / "configs"
+    (config_root / "defaults").mkdir(parents=True)
+    (config_root / "tenants" / "broken").mkdir(parents=True)
+
+    for f in ["intents.yaml", "tools.yaml", "channels.yaml", "prompt_template.yaml"]:
+        (config_root / "defaults" / f).write_text("{}", encoding="utf-8")
+
+    # missing required business_name
+    (config_root / "tenants" / "broken" / "tenant.yaml").write_text('{"tenant_id": "broken"}', encoding="utf-8")
+
+    manager = TenantManager(config_root=config_root)
+
+    with pytest.raises(TenantConfigError):
+        manager.load_tenant_config("broken")
+
+
+def test_invalid_tenant_id_rejected(project_root: Path):
+    manager = TenantManager(config_root=project_root / "configs")
+
+    with pytest.raises(TenantIdError):
+        manager.load_tenant_config("../etc/passwd")
+
+
+def test_tenant_id_with_invalid_chars_rejected(project_root: Path):
+    manager = TenantManager(config_root=project_root / "configs")
+
+    with pytest.raises(TenantIdError):
+        manager.load_tenant_config("example tenant")

@@ -1,31 +1,36 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel, Field
 
-
-class TenantMembership(BaseModel):
+@dataclass
+class TenantMembership:
     sender_id: str
     tenant_id: str
     channel: str
 
 
-class Tenant(BaseModel):
+@dataclass
+class Tenant:
     tenant_id: str
     business_name: str
     language: str = "de"
     timezone: str = "Europe/Berlin"
-    active_channels: list[str] = Field(default_factory=lambda: ["web"])
+    active_channels: list[str] = field(default_factory=lambda: ["web"])
 
 
-class TenantConfig(BaseModel):
+@dataclass
+class TenantConfig:
     tenant: Tenant
-    intents: dict[str, Any] = Field(default_factory=dict)
-    tools: dict[str, Any] = Field(default_factory=dict)
-    channels: dict[str, Any] = Field(default_factory=dict)
-    prompt_template: dict[str, Any] = Field(default_factory=dict)
+    intents: dict[str, Any] = field(default_factory=dict)
+    tools: dict[str, Any] = field(default_factory=dict)
+    channels: dict[str, Any] = field(default_factory=dict)
+    prompt_template: dict[str, Any] = field(default_factory=dict)
 
 
-class TenantContext(BaseModel):
+@dataclass
+class TenantContext:
     tenant_id: str
     config: TenantConfig
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)

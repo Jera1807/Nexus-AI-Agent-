@@ -1,2 +1,5 @@
-system_prompt_append: |
-  Priorisiere Termin-, Kurs- und FAQ-Anfragen.
+{
+  "style": {
+    "tone": "professionell"
+  }
+}

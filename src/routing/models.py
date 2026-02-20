@@ -1,6 +1,7 @@
-from enum import Enum
+from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from dataclasses import dataclass
+from enum import Enum
 
 
 class Tier(str, Enum):
@@ -15,9 +16,14 @@ class RiskLevel(str, Enum):
     HIGH = "high"
 
 
-class RoutingDecision(BaseModel):
+@dataclass
+class RoutingDecision:
     intent: str
     tier: Tier
     risk_level: RiskLevel
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: float
     rationale: str
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be in [0.0, 1.0]")

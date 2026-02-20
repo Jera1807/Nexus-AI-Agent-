@@ -1,10 +1,7 @@
-tenant_id: example_tenant
-business_name: "Beauty & Nailschool Bochum"
-language: de
-timezone: Europe/Berlin
-active_channels:
-  - web
-  - telegram
-contact:
-  escalation_email: "support@example.com"
-  escalation_phone: "+49-000-000000"
+{
+  "tenant_id": "example_tenant",
+  "business_name": "Beauty & Nailschool Bochum",
+  "language": "de",
+  "timezone": "Europe/Berlin",
+  "active_channels": ["web", "telegram"]
+}

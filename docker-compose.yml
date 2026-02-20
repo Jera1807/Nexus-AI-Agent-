@@ -8,7 +8,7 @@ services:
       - ./:/app
     env_file:
       - .env
-    command: bash -lc "pip install -e .[dev] && uvicorn src.main:app --host 0.0.0.0 --port 8000"
+    command: bash -lc "if [ ! -d .venv ]; then python -m venv .venv; fi && . .venv/bin/activate && pip install -e .[dev] && uvicorn src.main:app --host 0.0.0.0 --port 8000"
     depends_on:
       - redis
       - litellm
