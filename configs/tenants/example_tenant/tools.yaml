@@ -1,0 +1,7 @@
+tools:
+  calendar:
+    enabled: false
+  kb_search:
+    enabled: true
+    trim:
+      top_n: 3

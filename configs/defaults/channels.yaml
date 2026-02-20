@@ -1,0 +1,10 @@
+channels:
+  web:
+    enabled: true
+    disclosure: "Ich bin ein KI-Assistent und unterstütze dich bei deinem Anliegen."
+  telegram:
+    enabled: true
+    disclosure: "Ich bin der KI-Assistant dieses Unternehmens."
+  whatsapp:
+    enabled: false
+    disclosure: "Ich bin ein automatisierter KI-Service."
