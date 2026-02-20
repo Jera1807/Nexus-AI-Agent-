@@ -1,0 +1,9 @@
+intents:
+  booking:
+    keywords: ["modellage", "kurs", "anmeldung"]
+    default_tier: tier_2
+    risk_level: medium
+  cancellation:
+    keywords: ["kurs absagen", "termin absagen"]
+    default_tier: tier_2
+    risk_level: high

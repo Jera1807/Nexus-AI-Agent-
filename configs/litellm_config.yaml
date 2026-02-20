@@ -1,0 +1,29 @@
+model_list:
+  - model_name: tier_1
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/LITELLM_API_KEY
+      max_tokens: 350
+      timeout: 10
+  - model_name: tier_2
+    litellm_params:
+      model: openai/gpt-4.1-mini
+      api_key: os.environ/LITELLM_API_KEY
+      max_tokens: 800
+      timeout: 20
+  - model_name: tier_3
+    litellm_params:
+      model: openai/gpt-4.1
+      api_key: os.environ/LITELLM_API_KEY
+      max_tokens: 1200
+      timeout: 30
+
+router_settings:
+  routing_strategy: usage-based-routing
+  fallbacks:
+    - tier_3: [tier_2, tier_1]
+    - tier_2: [tier_1]
+
+general_settings:
+  master_key: ${LITELLM_API_KEY}
+  completion_model: tier_2

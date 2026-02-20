@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from src.config import settings
+from src.tenant.models import Tenant, TenantConfig, TenantContext, TenantMembership
+
+
+class TenantNotFoundError(FileNotFoundError):
+    """Raised when a tenant config directory does not exist."""
+
+
+class TenantManager:
+    """Loads tenant-aware configuration with defaults + override merging."""
+
+    def __init__(self, config_root: Path | None = None, default_tenant_id: str | None = None) -> None:
+        self.config_root = config_root or Path("configs")
+        self.defaults_root = self.config_root / "defaults"
+        self.tenants_root = self.config_root / "tenants"
+        self.default_tenant_id = default_tenant_id or settings.default_tenant_id
+
+    def resolve_tenant_id(self, membership: TenantMembership | None = None, tenant_id: str | None = None) -> str:
+        if tenant_id:
+            return tenant_id
+        if membership:
+            return membership.tenant_id
+        return self.default_tenant_id
+
+    def load_tenant_context(
+        self,
+        membership: TenantMembership | None = None,
+        tenant_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> TenantContext:
+        resolved_tenant_id = self.resolve_tenant_id(membership=membership, tenant_id=tenant_id)
+        tenant_config = self.load_tenant_config(resolved_tenant_id)
+        return TenantContext(
+            tenant_id=resolved_tenant_id,
+            config=tenant_config,
+            metadata=metadata or {},
+        )
+
+    def load_tenant_config(self, tenant_id: str) -> TenantConfig:
+        tenant_root = self.tenants_root / tenant_id
+        if not tenant_root.exists():
+            raise TenantNotFoundError(f"Tenant '{tenant_id}' not found in {self.tenants_root}")
+
+        tenant_data = self._read_yaml(tenant_root / "tenant.yaml")
+        tenant = Tenant(**tenant_data)
+
+        intents = self._merge_default_and_tenant("intents.yaml", tenant_root)
+        tools = self._merge_default_and_tenant("tools.yaml", tenant_root)
+        channels = self._merge_default_and_tenant("channels.yaml", tenant_root)
+        prompt_template = self._merge_default_and_tenant("prompt_template.yaml", tenant_root)
+
+        return TenantConfig(
+            tenant=tenant,
+            intents=intents,
+            tools=tools,
+            channels=channels,
+            prompt_template=prompt_template,
+        )
+
+    def _merge_default_and_tenant(self, filename: str, tenant_root: Path) -> dict[str, Any]:
+        default_data = self._read_yaml(self.defaults_root / filename)
+        tenant_data = self._read_yaml(tenant_root / filename, allow_missing=True)
+        return self._deep_merge(default_data, tenant_data)
+
+    def _read_yaml(self, path: Path, allow_missing: bool = False) -> dict[str, Any]:
+        if not path.exists():
+            if allow_missing:
+                return {}
+            raise FileNotFoundError(path)
+
+        with path.open("r", encoding="utf-8") as f:
+            raw_data = yaml.safe_load(f) or {}
+            if not isinstance(raw_data, dict):
+                raise ValueError(f"Expected mapping at {path}, got {type(raw_data)!r}")
+            return raw_data
+
+    def _deep_merge(self, base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+        merged = dict(base)
+        for key, value in override.items():
+            if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+                merged[key] = self._deep_merge(merged[key], value)
+            else:
+                merged[key] = value
+        return merged

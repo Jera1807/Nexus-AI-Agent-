@@ -1,0 +1,34 @@
+global:
+  max_result_bytes: 4096
+  require_confirm_for_high_risk: true
+
+tools:
+  kb_search:
+    description: "Search tenant knowledge base"
+    enabled: true
+    allowed_channels: ["web", "telegram", "whatsapp"]
+    scopes: ["read:kb"]
+    trim:
+      max_bytes: 2048
+      top_n: 5
+      field_whitelist: ["title", "snippet", "url"]
+
+  calendar:
+    description: "Read appointment availability"
+    enabled: true
+    allowed_channels: ["web", "telegram"]
+    scopes: ["read:calendar"]
+    trim:
+      max_bytes: 1024
+      top_n: 5
+      field_whitelist: ["date", "timeslots"]
+
+  human_escalation:
+    description: "Escalate conversation to human support"
+    enabled: true
+    allowed_channels: ["web", "telegram", "whatsapp"]
+    scopes: ["write:handoff"]
+    trim:
+      max_bytes: 512
+      top_n: 1
+      field_whitelist: ["status", "ticket_id"]

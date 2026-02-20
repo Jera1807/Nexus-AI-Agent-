@@ -1,0 +1,7 @@
+channels:
+  web:
+    enabled: true
+    disclosure: "Ich bin die KI-Assistentin von Beauty & Nailschool Bochum."
+  telegram:
+    enabled: true
+    disclosure: "KI-Support von Beauty & Nailschool Bochum."
