@@ -82,6 +82,11 @@ class TestFirewall(unittest.TestCase):
             )
         )
 
+
+    def test_firewall_allows_implicit_core_tool_when_absent_in_config(self) -> None:
+        cfg = {"global": {}, "tools": {"calendar": {"enabled": True}}}
+        self.assertTrue(validate_tool_call("kb_search", {"query": "preise"}, cfg))
+
     def test_firewall_allows_legit_system_prompt_question(self) -> None:
         self.assertTrue(
             validate_tool_call(

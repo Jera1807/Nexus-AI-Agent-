@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from src.tools.registry import ToolRegistry
+
 PROMPT_INJECTION_PATTERNS = [
     re.compile(r"\b(ignore|disregard|override)\b.{0,40}\b(instruction|previous|system)\b", re.IGNORECASE),
     re.compile(r"\byou are now\b", re.IGNORECASE),
@@ -20,8 +22,9 @@ def validate_tool_call(tool_name: str, args: dict[str, Any], tenant_tools_config
     if not isinstance(args, dict):
         return False
 
-    tool_cfg = tenant_tools_config.get("tools", {}).get(tool_name)
-    if not tool_cfg or not tool_cfg.get("enabled", True):
+    enabled_tools = ToolRegistry(tenant_tools_config).enabled_tools()
+    tool_cfg = enabled_tools.get(tool_name)
+    if not tool_cfg:
         return False
 
     for key, value in args.items():

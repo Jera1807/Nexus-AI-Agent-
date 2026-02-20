@@ -8,7 +8,7 @@ from src.grounding.validator import validate_grounding
 class TestGroundingValidation(unittest.TestCase):
     def setUp(self) -> None:
         self.registry = EntityRegistry(tenant_id="example")
-        self.registry.register_many(["KB-POLICY-001", "KB-FAQ-PRICES"]) 
+        self.registry.register_many(["KB-POLICY-001", "KB-FAQ-PRICES"])
 
     def test_fact_with_valid_citation_passes(self) -> None:
         result = validate_grounding("Der Preis ist 99 EUR [KB-FAQ-PRICES]", self.registry)

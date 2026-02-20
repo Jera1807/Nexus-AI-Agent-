@@ -1,7 +1,14 @@
-entries:
-  - id: KB-FAQ-001
-    title: "Öffnungszeiten"
-    snippet: "Montag bis Freitag 09:00-18:00 Uhr"
-  - id: KB-BOOKING-001
-    title: "Kursanmeldung"
-    snippet: "Anmeldungen sind online und telefonisch möglich."
+{
+  "entries": [
+    {
+      "id": "KB-FAQ-001",
+      "title": "Öffnungszeiten",
+      "snippet": "Montag bis Freitag 09:00-18:00 Uhr"
+    },
+    {
+      "id": "KB-BOOKING-001",
+      "title": "Kursanmeldung",
+      "snippet": "Anmeldungen sind online und telefonisch möglich."
+    }
+  ]
+}

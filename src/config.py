@@ -27,5 +27,19 @@ class Settings:
 
     default_tenant_id: str = os.getenv("DEFAULT_TENANT_ID", "example_tenant")
 
+    def __post_init__(self) -> None:
+        if self.app_env.lower() in {"prod", "production"}:
+            missing: list[str] = []
+            if not self.litellm_api_key or self.litellm_api_key == "changeme":
+                missing.append("LITELLM_API_KEY")
+            if not self.supabase_service_role_key:
+                missing.append("SUPABASE_SERVICE_ROLE_KEY")
+            if not self.langfuse_secret_key:
+                missing.append("LANGFUSE_SECRET_KEY")
+            if missing:
+                raise ValueError(
+                    "Missing/unsafe production credentials: " + ", ".join(missing)
+                )
+
 
 settings = Settings()

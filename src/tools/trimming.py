@@ -34,5 +34,6 @@ def trim_result(tool_name: str, raw_result: Any, tenant_tools_config: dict[str, 
 
     # deterministic fallback when trimmed payload is still too large
     payload = json.dumps(trimmed, ensure_ascii=False)
-    keep = max(0, max_bytes - len('{"truncated":true,"data":""}'))
+    overhead = _json_size_bytes({"truncated": True, "data": ""})
+    keep = max(0, max_bytes - overhead)
     return {"truncated": True, "data": payload[:keep]}
