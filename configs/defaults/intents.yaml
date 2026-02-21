@@ -1,0 +1,34 @@
+{
+  "intents": {
+    "faq": {
+      "keywords": ["price", "kosten", "öffnungszeiten", "adresse"],
+      "default_tier": "tier_1",
+      "risk_level": "low"
+    },
+    "booking": {
+      "keywords": ["book", "buchen", "termin", "appointment"],
+      "default_tier": "tier_2",
+      "risk_level": "medium"
+    },
+    "cancellation": {
+      "keywords": ["cancel", "storno", "absagen", "verschieben"],
+      "default_tier": "tier_2",
+      "risk_level": "high"
+    },
+    "consultation": {
+      "keywords": ["beratung", "advice", "empfehlung"],
+      "default_tier": "tier_2",
+      "risk_level": "medium"
+    },
+    "complaint": {
+      "keywords": ["beschwerde", "complaint", "unzufrieden"],
+      "default_tier": "tier_3",
+      "risk_level": "high"
+    },
+    "smalltalk": {
+      "keywords": ["hallo", "hello", "hey", "danke"],
+      "default_tier": "tier_1",
+      "risk_level": "low"
+    }
+  }
+}
