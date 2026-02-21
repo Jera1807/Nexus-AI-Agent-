@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import fields
 from pathlib import Path
 from typing import Any
 
@@ -55,9 +54,31 @@ class TenantManager:
     ) -> TenantContext:
         resolved_tenant_id = self.resolve_tenant_id(membership=membership, tenant_id=tenant_id)
         tenant_config = self.load_tenant_config(resolved_tenant_id)
+
+        tenant = tenant_config.tenant
+        prompt_variables = {
+            "business_name": tenant.business_name,
+            "language": tenant.language,
+            "tone": tenant_config.prompt_template.get("style", {}).get("tone", "freundlich"),
+            "domain_instructions": tenant_config.prompt_template.get("domain_instructions", ""),
+            "ki_disclosure": tenant_config.prompt_template.get(
+                "ki_disclosure",
+                f"Ich bin ein KI-Assistent von {tenant.business_name}.",
+            ),
+        }
+
+        enabled_tools = [
+            name for name, cfg in tenant_config.tools.get("tools", {}).items()
+            if cfg.get("enabled", True)
+        ]
+
         return TenantContext(
             tenant_id=resolved_tenant_id,
             config=tenant_config,
+            prompt_variables=prompt_variables,
+            active_tools=enabled_tools,
+            intent_clusters=tenant_config.intents.get("intents", {}),
+            risk_mapping=tenant_config.risk_mapping,
             metadata=metadata or {},
         )
 
@@ -95,7 +116,7 @@ class TenantManager:
             )
 
     def _validate_tenant_data(self, tenant_id: str, tenant_data: dict[str, Any]) -> Tenant:
-        expected = {f.name for f in fields(Tenant)}
+        expected = set(Tenant.model_fields.keys())
         provided = set(tenant_data.keys())
 
         required = {"tenant_id", "business_name"}
