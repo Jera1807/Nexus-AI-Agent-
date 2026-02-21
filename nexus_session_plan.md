@@ -1,263 +1,441 @@
-Project Nexus – Claude Code Session Plan
-Für jede Session: Öffne Claude Code im Projekt-Root und paste den Prompt. Claude
-Code liest automatisch CLAUDE.md als Kontext.
-Session 0: Repository Setup
-Ziel: Leeres Repo mit kompletter Struktur, Configs, Docker, CI/CD.
+# Project Nexus – Claude Code Session Plan
+
+> Für jede Session: Öffne Claude Code im Projekt-Root und paste den Prompt.
+> Claude Code liest automatisch CLAUDE.md als Kontext.
+
+-----
+
+## Session 0: Repository Setup
+
+**Ziel:** Lauffähiges Skelett mit Docker, Configs, Projektstruktur.
+
+```
 Lies CLAUDE.md. Erstelle die komplette Projektstruktur:
+
 1. pyproject.toml mit allen Dependencies (siehe CLAUDE.md Key Libraries)
-2. docker-compose.yml: services für agent (Python), litellm (proxy), redis
-3. .env.example mit allen nötigen Environment-Variablen
-4. src/ Verzeichnisstruktur mit __init__.py in jedem Package (inkl. tenant/ Package)
-5. src/config.py: Pydantic Settings Klasse die .env liest
-6. configs/litellm_config.yaml: 3-Tier Model Config mit Fallbacks und Budget-Limits
-7. configs/defaults/intents.yaml: Generische Intent-Cluster (faq, booking, cancellation, comp
-8. configs/defaults/tools.yaml: Tool-Registry mit Default-Permissions, Trimming-Limits, Chann
-9. configs/defaults/channels.yaml: Channel-Konfiguration
-10. configs/defaults/prompt_template.yaml: Base System-Prompt Template mit {tenant_variables}
-11. configs/tenants/example_tenant/: Komplettes Beispiel-Tenant-Verzeichnis (tenant.yaml, int
-12. src/tenant/models.py: Pydantic Models für Tenant, TenantMembership, TenantConfig
-13. tests/conftest.py mit Basis-Fixtures (mock tenant, mock config)
-14. .github/workflows/eval.yml: GitHub Action für Golden Questions
-15. README.md: Setup-Anleitung + "Wie lege ich einen neuen Tenant an?"
+2. docker-compose.yml: agent (Python), litellm (proxy), redis
+3. .env.example mit allen nötigen Variablen (LLM keys, Telegram token, Supabase URL, Redis, n8n URL)
+4. Komplette src/ Verzeichnisstruktur inkl. __init__.py:
+   agent/, routing/, memory/, grounding/, plugins/, integrations/,
+   channels/, subagents/, onboarding/, observability/, db/
+5. src/config.py: Pydantic Settings
+6. configs/litellm_config.yaml: 3-Tier mit Fallbacks + $2/day Budget
+7. configs/nexus.yaml: Core Settings (language, grounding_mode defaults, etc.)
+8. configs/intents/personal.yaml: Personal Assistant Intents:
+   - mail (check mail, send mail, search mail)
+   - calendar (show events, create event, find free time)
+   - reminder (set reminder, list reminders, cancel reminder)
+   - automation (create workflow, list workflows, run workflow)
+   - knowledge (remember this, what do you know about, search KB)
+   - subagent (create bot, manage bot, bot status)
+   - web_search (search for, look up, what is)
+   - general (greeting, thanks, help, smalltalk)
+   - unknown (fallback)
+9. configs/plugins/available.yaml: All known plugins with metadata
+10. configs/plugins/enabled.yaml: Default enabled (kb, reminders, web_search)
+11. configs/intents/subagent_base.yaml: Base intents for business bots (faq, booking, cancellation, complaint, general)
+12. configs/subagents/example_bot/: Example sub-agent config
+13. tests/conftest.py mit Fixtures
+14. .github/workflows/eval.yml
+15. README.md: "Nexus – Your Personal AI Agent. Self-hosted, open-source."
+    - What is Nexus? (30-second pitch)
+    - Quick Start (docker compose up + Telegram setup)
+    - Connecting Services (Gmail, Calendar, n8n)
+    - Creating Sub-Agents
+    - Plugin Development Guide (kurz)
 16. .gitignore
-Kein Anwendungscode – nur Struktur und Config. `docker compose up` soll ohne Fehler starten.
-Session 1: Tenant System + Core Agent Loop
-Ziel: Tenant Resolution + funktionierender ReAct Agent.
-Lies CLAUDE.md. Baue Tenant-System und Core Agent:
-1. src/tenant/manager.py: TenantManager
-- load_tenant(tenant_id) → TenantContext
-- Lädt Config aus configs/tenants/{id}/ mit Fallback auf configs/defaults/
-- resolve_tenant(channel, sender_id) → tenant_id (DB lookup oder Config-Mapping)
-- Cacht geladene TenantContexts in-memory (refresh alle 5 min)
-2. src/tenant/onboarding.py: Tenant Onboarding
-- create_tenant(name, config) → erstellt DB-Einträge + Config-Verzeichnis
-- Validiert Config gegen TenantConfig Schema
-3. src/agent/loop.py: Async ReAct Loop
-- Nimmt UnifiedMessage + ContextBundle + RoutingDecision + TenantContext
-- Baut System Prompt dynamisch (Base Template + Tenant Variables + Tool Schemas)
-- Ruft LiteLLM an (model aus RoutingDecision.tier)
-- Parsed Structured Output (AgentResponse Schema)
-- Max 3 Agent-Loops, Timeout: 30s
-4. src/agent/prompt.py: System Prompt Builder
-- load_base_template() aus configs/defaults/prompt_template.yaml
-- inject_tenant_variables(template, tenant_context) → personalisierter Prompt
-- inject_tools(prompt, tool_schemas) → Tools im Prompt
-- inject_context(prompt, context_bundle) → Memory im Prompt
-5. src/agent/structured.py: Alle Pydantic Schemas
-- AgentResponse, Citation, UIComponent, DecisionLog, Turn, Chunk
-- TenantContext (import from tenant/models.py)
-6. src/main.py: FastAPI App
-- POST /chat: nimmt {"text": "...", "channel": "web", "sender_id": "...", "tenant_id": "..
-- Resolves tenant → loads config → routes → agent → response
-- Vorerst: kein Routing, kein Memory – direkt Tier 2
-7. Tests: test_agent.py + test_tenant.py
-- TenantManager: lädt example_tenant Config korrekt
-- TenantManager: Fallback auf Defaults wenn Tenant-Config fehlt
-- Agent: beantwortet "Hallo" freundlich
-- Agent: gibt valid AgentResponse zurück
-- Agent: System Prompt enthält Tenant Business-Name
-- Agent: hält sich an max 3 Loops
-Teste mit: `python -m pytest tests/test_agent.py tests/test_tenant.py`
-Session 2: Routing Engine
-Ziel: 4-stufige Routing-Pipeline, tenant-aware.
-Lies CLAUDE.md. Baue das Routing Modul:
-1. src/routing/models.py: RoutingDecision, Tier, RiskLevel
-2. src/routing/keyword.py: Keyword Pre-Filter
-- Lädt Keywords aus tenant config (mit Fallback auf defaults)
-- Returns RoutingDecision | None
-3. src/routing/semantic.py: Semantic Router
-- Lädt Intent-Cluster pro Tenant aus configs/
-- sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2)
-- Per-intent Confidence-Schwellen (konfigurierbar)
-- Unknown-Intent Bucket Logging (für Drift-Handling)
-- Returns RoutingDecision | None
-4. src/routing/llm_classifier.py: LLM Fallback
-- Structured Output: {tier, risk_level, requires_confirmation, intent}
-- Nur wenn Keyword + Semantic Router None
-5. src/routing/confidence.py: Heuristic Confidence
-- Formel: 0.30*rag + 0.10*coverage + 0.20*tool + 0.25*validator + 0.15*citation
-- Gewichte konfigurierbar pro Tenant
-- Auto-low: hard facts without citations → 0.3
-- Eskalations-Logik
-6. src/routing/__init__.py: route(message, tenant_context) → RoutingDecision
-- Pipeline: keyword → semantic → llm_classifier
-- Fügt tools_to_load hinzu (aus Tenant tool-config)
-- Appliziert tenant-spezifisches risk_mapping
-7. Tests: test_routing.py
-- Generische Tests (nicht business-spezifisch):
-- Keyword "price" → Tier 1
-- Keyword "cancel" → Tier 2, risk=high
-- "Hello" → Tier 1, smalltalk
-- Gibberish → LLM Fallback triggered
-- Confidence Calculator: alle Schwellen
-- Tenant A hat "cancel"=high risk, Tenant B hat "cancel"=low risk → unterschiedliches Ro
-Teste mit: `python -m pytest tests/test_routing.py`
-Session 3: Memory System
-Ziel: 3-Layer Memory mit Token-Budget, tenant-scoped.
-Lies CLAUDE.md. Baue das Memory Modul:
-1. src/memory/working.py: Working Memory (Redis)
-- Key: tenant:{tenant_id}:conv:{conversation_id}:turns
-- FIFO, Token-counting via tiktoken
-2. src/memory/summary.py: Running Summary
-- Komprimiere alle 3 Messages via Tier-1 Model
-- Summary-Prompt ist generisch (kein Business-Kontext hardcoded)
-- Key: tenant:{tenant_id}:conv:{conversation_id}:summary
-3. src/memory/semantic.py: RAG Snippets
-- pgvector similarity search, WHERE tenant_id = {tenant_id}
-- Returns chunks mit score + source_id (für Citations)
-4. src/memory/context.py: Context Assembler
-- Budget: max 1,200 tokens total (konfigurierbar pro Tenant)
-- Priority: RAG > Last 2 turns > Summary > Older turns
-- Returns ContextBundle
-5. src/db/models.py: KB-Entry Model
-- id, tenant_id, category, content, embedding (vector), source, updated_at
-6. scripts/seed_kb.py: KB Seeder
-- Liest kb_seed.yaml aus Tenant-Config
-- Generiert Embeddings, speichert in Supabase
-- `python scripts/seed_kb.py --tenant example_tenant`
-7. Tests: test_memory.py
-- Working Memory: FIFO, Token-Limit
-- Summary: wird erstellt, <200 Tokens
-- RAG: tenant-scoped (Tenant A sieht nicht Tenant B's KB)
-- Context Assembler: 1,200 Token Budget nie überschritten
-Teste mit: `python -m pytest tests/test_memory.py`
-Session 4: Grounding & Validator
-Ziel: Deterministische Fakten-Prüfung mit Citations, tenant-aware.
-Lies CLAUDE.md. Baue das Grounding Modul:
-1. src/grounding/entity_registry.py: Entity Registry
-- Lädt entities aus Tenant's KB (auto-sync bei KB-Update)
-- Redis-cached pro Tenant, refresh alle 5 Min
-- Generisch: entities = {type: [values]} – z.B. {"service": [...], "price": [...]}
-2. src/grounding/validator.py: Deterministic Validator
-- Hard-Fact Detection: Regex (Preise, Zeiten, Telefon, Adressen) + Entity-Liste
-- Citation Check: citation-ID vorhanden? Existiert in KB? Wert stimmt?
-- Returns GroundingResult
-3. src/grounding/citations.py: Citation Engine
-- Generiert citation-IDs: KB-{CATEGORY}-{ID}
-- Validiert gegen Supabase (tenant-scoped)
-4. src/grounding/repair.py: Repair Logic
-- 1 retry max, dann fail-fast mit "Kann ich nicht zuverlässig beantworten"
-5. Tests: test_grounding.py
-- Fact mit citation → PASS
-- Fact ohne citation → FAIL + repair
-- Falsche citation → FAIL
-- Soft content (keine Facts) → PASS
-- Tenant-scoped: Entity Registry lädt nur eigene Entities
-Teste mit: `python -m pytest tests/test_grounding.py`
-Session 5: MCP Tools Layer
-Ziel: Dynamic Loading, Trimming, Firewall, Permissions – alles per-tenant
-konfigurierbar.
-Lies CLAUDE.md. Baue das Tools Modul:
-1. src/tools/registry.py: Tool Registry
-- Lädt Tool-Definitionen aus Tenant config (Fallback auf Defaults)
-- get_tools_for_intent(intent, tenant_context) → nur relevante Schemas
-- Core tools immer geladen: human_escalation, kb_search
-2. src/tools/trimming.py: Result Trimming
-- Per-tool config (max_bytes, top_n, field_whitelist) aus Tenant tools.yaml
-- Global cap: 4,096 bytes
-- trim_result(tool_name, raw_result, tenant_config) → trimmed
-3. src/tools/firewall.py: Tool Firewall
-- validate_tool_call(tool_name, args, tenant_context) → bool
-- Registry whitelist, Pydantic schema validation, injection detection
-4. src/tools/permissions.py: Permission System
-- check_scope, check_channel, check_confirmation – all tenant-configurable
-5. src/tools/servers/knowledge_base.py: KB Search (tenant-scoped)
-6. src/tools/servers/calendar.py: Calendar (MOCK, generic interface)
-7. src/tools/servers/human_escalation.py: Escalation (sends to tenant's contact)
-7. Tests: test_tools.py
-- Dynamic loading per intent
-- Trimming respects per-tool + global cap
-- Firewall rejects injection
-- Permissions differ per tenant config
-- Tenant A's tools ≠ Tenant B's tools
-Teste mit: `python -m pytest tests/test_tools.py`
-Session 6: Channels (Telegram + Web)
-Ziel: Telegram Bot + Web Chat, tenant-aware.
-Lies CLAUDE.md. Baue das Channels Modul:
-1. src/channels/message.py: UnifiedMessage + adapters
-- Tenant resolution: sender_id → tenant_id mapping
-2. src/channels/base.py: Abstract Channel
-- receive → UnifiedMessage, send → channel delivery
-- KI-Disclosure aus Tenant config
-3. src/channels/telegram.py: Telegram Bot (aiogram 3.x)
-- Multi-tenant: ein Bot kann mehrere Tenants bedienen (via Group/Chat Mapping)
-- Oder: separater Bot-Token pro Tenant (konfigurierbar)
-- /start mit tenant-spezifischer KI-Disclosure
-- Admin-Commands: /pause_proactive, /status
-4. src/channels/web.py: FastAPI WebSocket
-- tenant_id als Query-Parameter oder aus Auth-Token
-- Streaming, Generative UI components, fallback_text
-5. Tests: test_channels.py
-- Message parsing pro Channel
-- Tenant resolution korrekt
-- KI-Disclosure enthält tenant's business_name
-- Response formatting pro Channel
-Teste mit: `python -m pytest tests/test_channels.py`
-Session 7: Observability & Alerts
-Ziel: Langfuse + Decision Logs + PII Redaction + Alerts, tenant-scoped.
-Lies CLAUDE.md. Baue das Observability Modul:
-1. src/observability/langfuse.py: Langfuse Client
-- Decision Logs: 18 Felder inkl. tenant_id
-- Span-based tracing per module
-- Cost tracking per request + per tenant
-2. src/observability/pii.py: PII Redaction
-- Synthetic replacement (Faker, locale aus Tenant config)
-- Applied before logging
-3. src/observability/alerts.py: Alert System
-- Telegram webhook (alert channel konfigurierbar pro Tenant)
-- Thresholds konfigurierbar
-4. Integration in agent/loop.py
-5. Tests: test_observability.py
+17. scripts/setup.sh: One-command setup (copy .env.example, docker compose up)
+
+`docker compose up` soll starten ohne Fehler. Kein Anwendungscode.
+```
+
+-----
+
+## Session 1: Core Agent + Onboarding
+
+**Ziel:** Agent der in Telegram antwortet + interaktives Erstsetup.
+
+```
+Lies CLAUDE.md. Baue Core Agent + Telegram + Onboarding:
+
+1. src/agent/loop.py: Async ReAct Loop
+   - Input: UnifiedMessage + ContextBundle + RoutingDecision
+   - Dynamischer System Prompt (Base + Personal Facts + Plugin Schemas)
+   - LiteLLM Call (Tier aus RoutingDecision)
+   - Structured Output → AgentResponse
+   - Max 3 Loops, 30s Timeout
+
+2. src/agent/prompt.py: Prompt Builder
+   - Base Template: "Du bist Nexus, ein persönlicher AI-Agent. Du kannst Emails lesen,
+     Termine verwalten, Automationen bauen und Sub-Agents erstellen."
+   - Inject: Active plugin schemas, personal facts, conversation context
+   - Grounding-Mode-Aware: In OPEN mode keine Citation-Pflicht, in STRICT schon
+
+3. src/agent/structured.py: Pydantic Schemas
+   - AgentResponse, Citation, UIComponent, DecisionLog
+   - ConfirmationPayload (für Inline-Keyboard Aktionen)
+
+4. src/channels/telegram.py: Telegram Bot (aiogram 3.x)
+   - /start → Onboarding Flow
+   - Nachrichten → UnifiedMessage → Agent → Response
+   - Inline Keyboards für Confirmations
+   - /connect, /subagents, /help Commands
+
+5. src/channels/message.py: UnifiedMessage Model
+
+6. src/onboarding/flow.py: Interaktives Telegram-Setup
+   - Schritt 1: LLM Provider wählen (OpenRouter / eigener Key)
+   - Schritt 2: Name + Sprache
+   - Schritt 3: Speichert in DB/Config
+   - Am Ende: Willkommensnachricht mit verfügbaren Commands
+
+7. src/main.py: FastAPI + Telegram Bot Startup
+
+8. Tests: test_agent.py + test_onboarding.py
+   - Agent antwortet auf "Hallo"
+   - Agent gibt valid AgentResponse zurück
+   - Agent hält Max-Loops ein
+   - Onboarding speichert User-Preferences
+
+`python -m pytest tests/test_agent.py tests/test_onboarding.py`
+```
+
+-----
+
+## Session 2: Routing + Memory
+
+**Ziel:** Intelligentes Routing + Kontext-Management.
+
+```
+Lies CLAUDE.md. Baue Routing + Memory:
+
+ROUTING:
+1. src/routing/models.py: RoutingDecision mit grounding_mode Feld
+2. src/routing/keyword.py: Keywords aus configs/intents/personal.yaml
+3. src/routing/semantic.py: Embedding Router (multilingual MiniLM)
+   - Intents aus personal.yaml laden
+   - Unknown-Intent Bucket für Drift-Handling
+4. src/routing/llm_classifier.py: Fallback
+5. src/routing/confidence.py: Heuristic mit Grounding-Mode-Awareness
+   - OPEN mode: validator_weight=0, citation redistributed
+   - STRICT mode: full formula
+6. src/routing/__init__.py: route(message) → RoutingDecision
+   - Pipeline: keyword → semantic → llm
+   - Setzt grounding_mode automatisch:
+     - mail/calendar/reminder/automation intents → OPEN
+     - knowledge intents + KB exists → HYBRID
+     - subagent messages → STRICT
+
+MEMORY:
+7. src/memory/working.py: Last N turns (Redis)
+8. src/memory/summary.py: Running Summary (Tier-1 model)
+9. src/memory/semantic.py: RAG from personal KB (pgvector)
+10. src/memory/personal.py: Personal Facts Store
+    - Extrahiert automatisch Fakten aus Gesprächen:
+      "User heißt Jerome", "User's n8n ist auf localhost:5678"
+    - Speichert in Supabase, injiziert in System Prompt
+    - CRUD: User kann Facts manuell hinzufügen/löschen (/facts)
+11. src/memory/context.py: Context Assembler (1,200 Token Budget)
+
+Tests: test_routing.py + test_memory.py
+- "Check my mails" → intent=mail, grounding=OPEN, Tier 1
+- "Remind me tomorrow at 9" → intent=reminder, OPEN, Tier 1
+- "Create a bot for my shop" → intent=subagent, Tier 2
+- "What's quantum physics?" → intent=general, OPEN, Tier 1
+- Memory: Personal facts extracted + recalled
+- Memory: Budget nie überschritten
+- Memory: Tenant-scoped (Sub-Agent sieht nicht personal memory)
+
+`python -m pytest tests/test_routing.py tests/test_memory.py`
+```
+
+-----
+
+## Session 3: Plugin System
+
+**Ziel:** MCP-basiertes Plugin-System + Built-in Plugins.
+
+```
+Lies CLAUDE.md. Baue das Plugin-System:
+
+1. src/plugins/manager.py: Plugin Manager
+   - discover() → list available plugins (from configs/plugins/)
+   - install(plugin_id) → activate plugin
+   - enable/disable per user
+   - /connect {plugin} Telegram command handler
+
+2. src/plugins/registry.py: Active Plugin Registry
+   - get_plugins_for_intent(intent) → nur relevante Plugin-Schemas
+   - Core plugins immer geladen (kb, reminders, web_search, escalation)
+
+3. src/plugins/trimming.py: Result Trimming
+   - Per-plugin limits + Global 4KB cap
+
+4. src/plugins/firewall.py: Security
+   - Pydantic validation, injection detection, whitelist only
+
+5. src/plugins/permissions.py: Scopes + Confirmation Gates
+   - Read-Aktionen: kein Confirm nötig
+   - Write-Aktionen: Inline Keyboard Confirm
+   - Destructive: Double Confirm
+
+6. Built-in Plugins:
+   src/plugins/builtin/knowledge_base.py:
+   - search(query) → chunks with citations
+   - add(content, category) → neuer KB-Eintrag
+   - /kb add "Mein Geburtstag ist am 18. Juli"
+
+   src/plugins/builtin/reminders.py:
+   - set(text, datetime) → Redis-backed, APScheduler
+   - list() → alle aktiven Reminders
+   - cancel(id)
+   - Sendet Erinnerung via Telegram zur eingestellten Zeit
+
+   src/plugins/builtin/web_search.py:
+   - search(query) → Top-5 Ergebnisse (via SearXNG oder DuckDuckGo API)
+
+7. Tests: test_plugins.py
+   - Dynamic loading: mail intent → gmail plugin loaded
+   - Trimming: oversized result → trimmed to cap
+   - Firewall: injection blocked
+   - Reminders: set → fires at correct time (mock clock)
+   - KB: add entry → searchable
+
+`python -m pytest tests/test_plugins.py`
+```
+
+-----
+
+## Session 4: Gmail + Calendar Integration
+
+**Ziel:** Echte Gmail und Google Calendar Anbindung.
+
+```
+Lies CLAUDE.md. Baue Gmail + Calendar MCP-Server:
+
+1. src/integrations/gmail/server.py: Gmail MCP Server
+   - list_unread(max=10) → subjects, senders, preview
+   - search(query) → filtered results
+   - read(message_id) → full body
+   - send(to, subject, body) → requires confirmation
+   - summarize_inbox() → AI-powered inbox summary
+
+2. src/integrations/gmail/auth.py: OAuth2 Flow
+   - /connect gmail → generates OAuth URL → user clicks → callback saves token
+   - Token refresh logic
+   - Tokens encrypted in Supabase
+
+3. src/integrations/gcalendar/server.py: Calendar MCP Server
+   - list_events(date_range) → upcoming events
+   - create_event(title, date, time, duration) → requires confirmation
+   - find_free_time(date_range) → available slots
+   - update_event(id, changes) → requires confirmation
+   - delete_event(id) → requires double confirmation
+
+4. src/integrations/gcalendar/auth.py: Shared OAuth2 (Google scopes)
+
+5. Tests: test_gmail.py + test_calendar.py (mit Mocks)
+   - "Check my mails" → list_unread aufgerufen, formatiert zurück
+   - "Send an email to X" → confirmation gate → send
+   - "What's on my calendar tomorrow?" → list_events
+   - "Book a meeting tomorrow at 3" → create_event + confirm
+   - OAuth flow: Token gespeichert + refreshed
+
+`python -m pytest tests/test_gmail.py tests/test_calendar.py`
+```
+
+-----
+
+## Session 5: n8n Integration (Game-Changer)
+
+**Ziel:** n8n Workflows lesen, triggern und ERSTELLEN via Chat.
+
+```
+Lies CLAUDE.md. Baue den n8n MCP-Server:
+
+1. src/integrations/n8n/server.py: n8n MCP Server
+   - list_workflows() → name, active status, last run
+   - get_workflow(id) → full workflow details
+   - trigger_workflow(id, data?) → execute + return result
+   - create_workflow(spec) → creates new workflow via n8n API
+   - update_workflow(id, changes) → modify existing
+   - activate/deactivate_workflow(id)
+
+2. src/integrations/n8n/builder.py: Workflow Builder (AI-powered)
+   - User beschreibt in natürlicher Sprache was der Workflow tun soll
+   - Nexus generiert n8n-kompatibles Workflow-JSON
+   - Kennt n8n Node-Typen: Cron, Gmail, HTTP, AI, Telegram, Notion, etc.
+   - Generiert via Tier-2/3 LLM mit Structured Output
+   - Validiert JSON gegen n8n Schema bevor es gesendet wird
+
+3. src/integrations/n8n/templates.py: Workflow-Vorlagen
+   - "Daily inbox summary" → fertige Vorlage
+   - "Weekly report" → fertige Vorlage
+   - "Invoice monitor" → fertige Vorlage
+   - Templates können als Basis genommen und angepasst werden
+
+4. src/integrations/n8n/auth.py: API Key Auth
+   - /connect n8n → User gibt n8n URL + API Key ein
+   - Stored encrypted in Supabase
+
+5. Telegram UX für Workflow-Erstellung:
+   - User beschreibt Workflow
+   - Nexus zeigt Preview (Schritte als nummerierte Liste)
+   - Inline Keyboard: [✅ Erstellen] [✏️ Anpassen] [❌ Abbrechen]
+   - "Anpassen" → follow-up Fragen
+   - "Erstellen" → API call + Bestätigung
+
+6. Tests: test_n8n.py
+   - list_workflows → korrekt formatiert
+   - trigger_workflow → Ausführung + Ergebnis
+   - create_workflow: "Send me a Telegram message every day at 8am"
+     → valides n8n JSON mit Cron + Telegram Node
+   - create_workflow: "Monitor Gmail for invoices, save to Drive"
+     → valides JSON mit Gmail + Google Drive Nodes
+   - Confirmation gate für create/delete
+
+`python -m pytest tests/test_n8n.py`
+```
+
+-----
+
+## Session 6: Grounding + Observability
+
+**Ziel:** Mode-abhängige Faktenprüfung + Decision Logs.
+
+```
+Lies CLAUDE.md. Baue Grounding + Observability:
+
+GROUNDING:
+1. src/grounding/validator.py: Mode-Aware Validator
+   - STRICT: Full validation (Hard-Fact detection, citation check, repair)
+   - HYBRID: Validate if KB-hit exists, allow LLM-only answers (marked)
+   - OPEN: Skip validation (tool results are ground truth)
+
+2. src/grounding/citations.py: Citation Engine (nur STRICT/HYBRID)
+3. src/grounding/entity_registry.py: Per-namespace (user KB, sub-agent KB)
+4. src/grounding/repair.py: 1-step repair (nur STRICT)
+
+OBSERVABILITY:
+5. src/observability/langfuse.py: Decision Logs (20 Felder, siehe CLAUDE.md)
+6. src/observability/pii.py: Synthetic PII replacement
+7. src/observability/alerts.py: Telegram alerts bei Anomalien
+
+Tests: test_grounding.py + test_observability.py
+- STRICT mode: fact without citation → FAIL
+- OPEN mode: same fact → PASS (no validation)
+- HYBRID mode: KB hit → validated, no KB hit → allowed but marked
+- Decision log: all fields populated
 - PII redaction works
-- Decision Log has all 18 fields
-- tenant_id in every log entry
-Teste mit: `python -m pytest tests/test_observability.py`
-Session 8: Golden Questions & Eval
-Ziel: Generisches Eval-Framework, per-tenant test suites.
-Lies CLAUDE.md. Baue das Eval Framework:
-1. tests/golden_questions/questions.yaml: Template mit 30 generischen Tests
-Kategorien: FAQ, Booking, Cancellation, Consultation, Complaint, Edge Cases
-Jeder Test: input, expected_intent, expected_tier, must_have_citations, max_tokens, max_la
+
+`python -m pytest tests/test_grounding.py tests/test_observability.py`
+```
+
+-----
+
+## Session 7: Sub-Agent Factory
+
+**Ziel:** Sub-Agents via Chat erstellen und verwalten.
+
+```
+Lies CLAUDE.md. Baue das Sub-Agent System:
+
+1. src/subagents/manager.py: Sub-Agent CRUD
+   - create(name, channel, kb_content) → SubAgent
+   - Erstellt: KB namespace, system prompt, intent config, channel setup
+   - list() → alle Sub-Agents des Users
+   - delete(id) → cleanup
+   - /subagent {name} status/pause/resume/kb/logs Commands
+
+2. src/subagents/runtime.py: Sub-Agent Execution
+   - Isolierter Kontext (eigene KB, eigener Prompt, STRICT grounding)
+   - Shared LLM Gateway (LiteLLM) aber separates Cost-Tracking
+   - Kann NICHT auf persönliche Plugins zugreifen (Gmail, Calendar etc.)
+   - Nur: kb_search, human_escalation + konfigurierte Business-Tools
+
+3. src/subagents/templates.py: Vorgefertigte Templates
+   - "customer_service": FAQ + Beschwerden + Weiterleitung
+   - "appointment_booking": Termine + Storno + Erinnerungen
+   - "lead_capture": Kontaktdaten sammeln + CRM-Eintrag
+
+4. src/subagents/models.py: SubAgent, SubAgentConfig
+
+5. Telegram UX:
+   - "Create a bot for my nail school" → interaktiver Setup-Flow
+   - Nexus fragt: Name? Channel? Was soll er können? KB-Inhalt?
+   - Erstellt Sub-Agent + gibt Management-Commands
+
+6. Tests: test_subagents.py
+   - Create sub-agent → isolierte KB erstellt
+   - Sub-agent antwortet nur aus eigener KB (STRICT)
+   - Sub-agent kann nicht auf Gmail zugreifen
+   - Sub-agent hat eigenes Cost-Tracking
+   - Delete → cleanup komplett
+
+`python -m pytest tests/test_subagents.py`
+```
+
+-----
+
+## Session 8: Golden Questions + Eval + Polish
+
+**Ziel:** End-to-End Tests, CI/CD, Dokumentation.
+
+```
+Lies CLAUDE.md. Baue Eval-Framework + finaler Polish:
+
+1. tests/golden_questions/questions.yaml: 40 Test Cases
+   Personal Agent (25):
+   - Mail: "Check my emails", "Send email to X", "Summarize inbox"
+   - Calendar: "What's on tomorrow?", "Book meeting at 3"
+   - Reminders: "Remind me at 9", "List my reminders", "Cancel reminder"
+   - n8n: "List my workflows", "Run weekly report", "Create a workflow that..."
+   - KB: "Remember that X", "What do you know about Y"
+   - General: "Hello", "Help", "What can you do?"
+   - Edge: prompt injection, gibberish, 10+ turns, mixed language
+
+   Sub-Agent (15):
+   - FAQ from KB only, no hallucination
+   - Unknown question → honest "I don't know"
+   - Attempted access to personal plugins → blocked
+   - Citation present for all hard facts
+
 2. tests/golden_questions/runner.py: Eval Runner
-- Lädt Fragen (generisch oder tenant-spezifisch)
-- Führt gegen Live-Agent aus
-- Führt gegen Live-Agent aus
-- Prüft: Korrektheit, Routing, Grounding, Tokens, Latenz
-- Prüft: Korrektheit, Routing, Grounding, Tokens, Latenz
-- Output: JSON Report
-- Output: JSON Report
-3. scripts/run_evals.py: CLI
-- `python scripts/run_evals.py --tenant example_tenant --suite golden`
-- `python scripts/run_evals.py --tenant example_tenant --suite smoke`
-4. scripts/calibrate.py: Confidence Calibration
-- Liest Decision Logs aus Langfuse
-- Pro Tenant: False Escalations / False Passes analysieren
-- Output: empfohlene neue Gewichte + Before/After KPIs
-5. .github/workflows/eval.yml: CI
-- Smoke suite bei push, full bei release
-6. scripts/onboard_tenant.py: Tenant Onboarding CLI
-- `python scripts/onboard_tenant.py --name "New Business" --language de`
-- Erstellt Tenant-Config Verzeichnis aus Template
-- Erstellt DB-Einträge (tenant, membership)
-- Seeded KB aus kb_seed.yaml
-- Gibt Checkliste aus: "Nächste Schritte: Intents anpassen, KB füllen, Channels konfigurie
-Teste mit: `python -m pytest tests/ -v`
-Session 9+ (Optional / Later)
-Session Modul Wann
-9 WhatsApp (Baileys Node.js Bridge) Wenn Telegram stabil
-10 Proactive Jobs (Cron, per tenant) Nach 2 Wochen Live
-11 Generative UI (React Web Widget) Wenn Web-Channel aktiv
-12 Admin Dashboard (Tenant Management) Bei 3+ Tenants
-Regeln für alle Sessions
-1. Immer CLAUDE.md zuerst lesen
-2. Kein Business-spezifischer Code – alles über Tenant-Config
-3. TenantContext durchreichen – jede Funktion die Business-Logik braucht bekommt
-TenantContext
-4. Tests mit Mock-Tenant – conftest.py hat einen “example_
-tenant” Fixture
-5. Git Commit nach jedem Modul
-6. Mocks für externe Services – kein echtes LLM/Supabase/Redis in Unit-Tests
-7. Config-Vererbung – Tenant-Config überschreibt Defaults, fehlende Keys fallen
-zurück
-8. Generische Beispiele – Intent-Beispiele, KB-Seeds in
-configs/tenants/example_tenant/ als Vorlag
+3. scripts/run_evals.py: CLI (--suite smoke/full)
+4. scripts/calibrate.py: Weekly confidence calibration
+5. .github/workflows/eval.yml: CI (smoke on push, full on release)
+
+6. Polish:
+   - README.md finalisieren (Screenshots, GIFs wenn möglich)
+   - /help Command mit allen verfügbaren Features
+   - Error handling: graceful failures mit hilfreichen Meldungen
+   - Rate limiting: max 30 messages/minute
+
+`python -m pytest tests/ -v`
+```
+
+-----
+
+## Session 9+ (Later)
+
+|Session|Modul                                      |Wann                   |
+|-------|-------------------------------------------|-----------------------|
+|9      |WhatsApp Channel (Baileys)                 |Wenn Telegram stabil   |
+|10     |Web Chat (FastAPI WebSocket + React Widget)|Für Sub-Agent Embedding|
+|11     |Notion Integration                         |Bei Bedarf             |
+|12     |Filesystem Plugin (lokale Dateien)         |Bei Bedarf             |
+|13     |Community Plugin SDK                       |Wenn Core stable       |
+|14     |Admin Dashboard (Web)                      |Bei mehreren Sub-Agents|
+
+-----
+
+## Regeln für alle Sessions
+
+1. **CLAUDE.md zuerst lesen** – immer
+1. **Personal-first** – Core Use Case ist der persönliche Agent, nicht Business-Bots
+1. **Plugins, nicht hardcoded** – Jede Integration ist ein MCP-Server
+1. **Grounding-Mode beachten** – OPEN für Personal, STRICT für Sub-Agents
+1. **Telegram ist primary channel** – alles muss in Telegram gut funktionieren
+1. **Git Commit nach jedem Modul**
+1. **Mocks für Tests** – kein echtes Gmail/Calendar/n8n in Unit-Tests
+1. **n8n ist First-Class** – nicht als Afterthought, sondern als Kernfeature
