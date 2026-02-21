@@ -32,13 +32,13 @@ Multi-tenant AI-Agent Framework für den produktiven Einsatz bei KMU.
 - Session 2 (Routing Core: keyword + semantic + confidence + fallback): **~45%**
 - Session 3 (Memory Core: working + summary + semantic + context budget): **~35%**
 - Session 4 (Grounding Core: citations + validator + repair + entity registry): **~30%**
-- Session 5 (Tools Core: registry + trimming + firewall + permissions): **~30%**
+- Session 5 (Tools Core: registry + trimming + firewall + permissions + tool servers): **~45%**
 - Session 6 (Onboarding/Evals + Channels basics): **~40%**
 - Session 7 (Observability baseline: logging + PII + alerts): **~30%**
 - Session 8 (Proactive baseline: consent + jobs + scheduler): **~25%**
 - Session 9+ (Channels integration depth, advanced Evals): **~10%**
 
-Gesamtfortschritt über Sessions 0–8: **ca. 71%**.
+Gesamtfortschritt über Sessions 0–8: **ca. 74%**.
 
 ## Wie lege ich einen neuen Tenant an?
 
