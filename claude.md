@@ -1,308 +1,549 @@
-Project Nexus – CLAUDE.md
-This file is the single source of truth for Claude Code sessions. Read this FIRST
-before writing any code.
-What is Nexus?
-A universal, multi-tenant AI agent framework for deploying autonomous chatbots
-across any business. Not a single-purpose bot – a platform that can be configured for
-any client via tenant-specific configs (KB, prompts, tools, intents).
-First deployment: Beauty & Nailschool Bochum (nail design school) Built by: AI &
-Automation Ruhr (Jerome’s consulting business) Business model: Deploy Nexus
-instances for SME clients as productized service
-Design Principles
-1. Tenant-agnostic core – All business logic is configurable, not hardcoded
-2. Config-driven – New client = new tenant config, not new code
-3. Cost-optimized – 3-tier model routing, caching, dynamic tool loading
-4. Production-grade – Grounding validation, tool firewall, decision logs, CI/CD evals
-5. Multi-channel – Same agent logic across WhatsApp, Telegram, Web, Email
-Tech Stack
-Component Choice Why
-Language Python 3.12+ (async) Performance + ecosystem
-Agent Loop Custom ReAct (NO LangGraph) Simpler debugging, fewer deps
-LLM
-Gateway LiteLLM Proxy Unified API for all providers
-Database Supabase (Postgres + pgvector) Free tier, managed, RLS for
-multi-tenant
-Cache Upstash Redis (free tier) Session state, response cache
-Embedding paraphrase-multilingual-MiniLM-
-L12-v2 (local) Multilingual, 0 cost
-Observability Langfuse Cloud (free tier) 50k observations/mo
-Tools MCP Protocol Industry standard
-WhatsApp Baileys (Node.js bridge) Free, no Meta Business API
-needed
-Telegram aiogram 3.x Async, inline keyboards
-Hosting Hetzner CX11 (2 vCPU, 4GB RAM) 3.29€/mo, GDPR DE
-Project Structure
+# Project Nexus – CLAUDE.md
+
+> Single source of truth for Claude Code sessions. Read FIRST.
+
+## What is Nexus?
+
+A **self-hosted, open-source Personal AI Agent** that lives in your Telegram (or other channels).
+It can act on your behalf: read emails, manage calendars, build automations, do research –
+and create & manage **sub-agents** (e.g. customer service bots for your business).
+
+**Primary:** Personal AI Assistant (your daily life + productivity)
+**Secondary:** Sub-Agent Factory (spin up business chatbots on demand)
+**Open Source:** Users self-host, own their data, extend with plugins
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────┐
+│  YOU (Telegram / Web / WhatsApp)                    │
+└──────────────────┬──────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────┐
+│  NEXUS CORE (Personal Agent)                        │
+│  ┌─────────┐ ┌─────────┐ ┌──────────┐ ┌─────────┐  │
+│  │ Router  │ │ Memory  │ │ Grounding│ │ Prompt  │  │
+│  │ 3-Tier  │ │ 3-Layer │ │ flexible │ │ Builder │  │
+│  └─────────┘ └─────────┘ └──────────┘ └─────────┘  │
+│  ┌──────────────────────────────────────────────┐   │
+│  │  MCP Plugin System                           │   │
+│  │  📧 Gmail  📅 Calendar  🔧 n8n  📝 Notion   │   │
+│  │  🔍 Web    📁 Files     🗄️ DB   🔌 Custom   │   │
+│  └──────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────┐   │
+│  │  Sub-Agent Manager                           │   │
+│  │  🤖 Nailschool Bot  🤖 Pizzeria Bot  🤖 ... │   │
+│  │  (each: own KB, own channel, strict ground.) │   │
+│  └──────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+```
+
+## Design Principles
+
+1. **Personal-first** – Core use case is YOU talking to YOUR agent
+1. **Action-oriented** – Not just answering questions, but doing things
+1. **Plugin-based** – MCP servers as plugins; install only what you need
+1. **Self-hosted** – Your data stays on your machine/server
+1. **Sub-agents as feature** – Business chatbots are a capability, not the product
+1. **Open Source** – Community can build plugins, share configs, contribute
+
+## Tech Stack
+
+|Component      |Choice                                       |Why                                      |
+|---------------|---------------------------------------------|-----------------------------------------|
+|Language       |Python 3.12+ (async)                         |Performance + ecosystem                  |
+|Agent Loop     |Custom ReAct (NO LangGraph)                  |Simple, debuggable, fewer deps           |
+|LLM Gateway    |LiteLLM Proxy                                |Unified API, any provider, budget control|
+|Database       |Supabase (Postgres + pgvector)               |Free tier, managed, RLS                  |
+|Cache          |Redis (Upstash free or local)                |Session state, response cache            |
+|Embedding      |paraphrase-multilingual-MiniLM-L12-v2 (local)|Multilingual, 0 cost                     |
+|Observability  |Langfuse Cloud (free tier)                   |50k obs/mo, optional                     |
+|Plugins        |MCP Protocol                                 |Industry standard, huge ecosystem        |
+|Primary Channel|Telegram (aiogram 3.x)                       |Best bot API, inline UI, free            |
+|Alt Channels   |WhatsApp (Baileys), Web (FastAPI WS)         |Optional                                 |
+|Hosting        |Hetzner CX11 or local Docker                 |3.29€/mo or free                         |
+
+## Project Structure
+
+```
 project-nexus/
-├── CLAUDE.md # THIS FILE
-├── README.md
-├── pyproject.toml ├── docker-compose.yml # uv/pip, Python 3.12+
-# Agent + LiteLLM + Redis
+├── CLAUDE.md                    # THIS FILE
+├── README.md                    # Setup guide for end users
+├── pyproject.toml
+├── docker-compose.yml           # Nexus + LiteLLM + Redis
 ├── .env.example
-├── .github/
-│ └── workflows/
-│ └── eval.yml # Golden Questions CI
+├── .github/workflows/
+│   └── eval.yml
 │
 ├── src/
-│ ├── __init__.py
-│ ├── main.py │ ├── config.py # Entrypoint: FastAPI app
-# Pydantic Settings (.env)
-│ │
-│ ├── agent/
-│ │ ├── __init__.py
-│ │ ├── loop.py # ReAct agent loop (async)
-│ │ ├── prompt.py # System prompt builder (dynamic, tenant-aware)
-│ │ └── structured.py # Pydantic output schemas
-│ │
-│ ├── routing/
-│ │ ├── __init__.py
-│ │ ├── keyword.py # Step 1: Keyword pre-filter
-│ │ ├── semantic.py # Step 2: Semantic Router (embedding)
-│ │ ├── llm_classifier.py # Step 3: LLM fallback classifier
-│ │ ├── confidence.py # Heuristic confidence calculation
-│ │ └── models.py # RoutingDecision, Tier, RiskLevel
-│ │
-│ ├── memory/
-│ │ ├── __init__.py
-│ │ ├── working.py # Last N turns (Redis)
-│ │ ├── summary.py # Running summary (compressed)
-│ │ ├── semantic.py # RAG snippets (pgvector)
-│ │ └── context.py # Context assembler (budget enforcement)
-│ │
-│ ├── grounding/
-│ │ ├── __init__.py
-│ │ ├── validator.py # Deterministic grounding validator
-│ │ ├── citations.py # Machine-readable citation engine
-│ │ ├── entity_registry.py # Auto-synced entity/policy lists (per tenant)
-│ │ └── repair.py # 1-step repair logic
-│ │
-│ ├── tools/
-│ │ ├── __init__.py
-│ │ ├── registry.py # Tool registry + dynamic loading (per tenant)
-│ │ ├── trimming.py # Result trimming (per-tool + global cap)
-│ │ ├── firewall.py # Structured calls only, param validation
-│ │ ├── permissions.py # Scopes, channel allowlists, confirmations
-│ │ └── servers/ # MCP server implementations
-│ │ ├── knowledge_base.py
-│ │ ├── calendar.py
-│ │ ├── customer.py
-│ │ └──
-...
-│ │
-│ ├── channels/
-│ │ ├── web.py │ │
-│ │ ├── pii.py │ │
-│ ├── proactive/
-│ │ ├── __init__.py
-│ │ ├── base.py # Abstract channel interface
-│ │ ├── telegram.py # aiogram 3.x bot
-│ │ ├── whatsapp.py # Baileys bridge client
-# FastAPI WebSocket
-│ │ └── message.py # Unified message format
-│ ├── observability/
-│ │ ├── __init__.py
-│ │ ├── langfuse.py # Langfuse client + decision logs
-# PII redaction (synthetic replacement)
-│ │ └── alerts.py # Telegram alert webhooks
-│ │ ├── __init__.py
-│ │ ├── scheduler.py # Cron job scheduler
-│ │ ├── jobs.py # Configurable background jobs (per tenant)
-│ │ └── consent.py # Opt-in/out, segmentation, frequency caps
-│ │
-│ ├── tenant/
-│ │ ├── __init__.py
-│ │ ├── manager.py # Tenant resolution + config loading
-│ │ ├── models.py # Tenant, TenantMembership, TenantConfig
-│ │ └── onboarding.py # Provision new tenant (DB, KB, intents, prompt)
-│ │
-│ └── db/
-│ ├── __init__.py
-│ ├── supabase.py # Supabase client
-│ ├── models.py # SQLAlchemy/Pydantic DB models
-│ └── migrations/ # SQL migration files
+│   ├── __init__.py
+│   ├── main.py                  # FastAPI entrypoint
+│   ├── config.py                # Pydantic Settings (.env)
+│   │
+│   ├── agent/                   # Core agent logic
+│   │   ├── __init__.py
+│   │   ├── loop.py              # ReAct loop (async, max 3 iterations)
+│   │   ├── prompt.py            # Dynamic prompt builder
+│   │   └── structured.py        # Output schemas (Pydantic)
+│   │
+│   ├── routing/                 # Intent classification + model selection
+│   │   ├── __init__.py
+│   │   ├── keyword.py           # Step 1: keyword pre-filter
+│   │   ├── semantic.py          # Step 2: embedding similarity
+│   │   ├── llm_classifier.py    # Step 3: LLM fallback
+│   │   ├── confidence.py        # Heuristic confidence scoring
+│   │   └── models.py            # RoutingDecision, Tier, RiskLevel
+│   │
+│   ├── memory/                  # Context management
+│   │   ├── __init__.py
+│   │   ├── working.py           # Last N turns (Redis)
+│   │   ├── summary.py           # Running summary (compressed)
+│   │   ├── semantic.py          # RAG from personal KB (pgvector)
+│   │   ├── context.py           # Budget-enforced context assembly
+│   │   └── personal.py          # Long-term personal facts store
+│   │
+│   ├── grounding/               # Fact validation (mode-dependent)
+│   │   ├── __init__.py
+│   │   ├── validator.py         # Deterministic grounding check
+│   │   ├── citations.py         # Citation engine
+│   │   ├── entity_registry.py   # Known facts registry
+│   │   └── repair.py            # 1-step repair
+│   │
+│   ├── plugins/                 # MCP Plugin System
+│   │   ├── __init__.py
+│   │   ├── manager.py           # Plugin discovery, install, enable/disable
+│   │   ├── registry.py          # Active plugins + dynamic tool loading
+│   │   ├── trimming.py          # Result trimming (per-plugin + global cap)
+│   │   ├── firewall.py          # Structured calls, injection protection
+│   │   ├── permissions.py       # Scopes + confirmation gates
+│   │   └── builtin/             # Built-in plugins (ship with Nexus)
+│   │       ├── knowledge_base.py    # Personal KB search
+│   │       ├── reminders.py         # Scheduled reminders
+│   │       ├── web_search.py        # Web search
+│   │       └── human_escalation.py  # Fallback
+│   │
+│   ├── integrations/            # First-party MCP server configs
+│   │   ├── gmail/               # Gmail read/send/search
+│   │   ├── gcalendar/           # Google Calendar CRUD
+│   │   ├── n8n/                 # n8n workflow CRUD + trigger
+│   │   ├── notion/              # Notion pages/databases
+│   │   └── filesystem/          # Local file access
+│   │
+│   ├── channels/                # Communication interfaces
+│   │   ├── __init__.py
+│   │   ├── base.py              # Abstract channel
+│   │   ├── telegram.py          # Primary: aiogram 3.x
+│   │   ├── web.py               # WebSocket chat
+│   │   ├── whatsapp.py          # Baileys bridge (optional)
+│   │   └── message.py           # UnifiedMessage model
+│   │
+│   ├── subagents/               # Sub-Agent Factory
+│   │   ├── __init__.py
+│   │   ├── manager.py           # Create, configure, deploy sub-agents
+│   │   ├── runtime.py           # Sub-agent execution (isolated context)
+│   │   ├── templates.py         # Pre-built templates (customer service, FAQ, ...)
+│   │   └── models.py            # SubAgent, SubAgentConfig
+│   │
+│   ├── onboarding/              # First-run setup (Telegram-based)
+│   │   ├── __init__.py
+│   │   └── flow.py              # Interactive setup via chat
+│   │
+│   ├── observability/
+│   │   ├── __init__.py
+│   │   ├── langfuse.py          # Tracing + decision logs
+│   │   ├── pii.py               # PII redaction
+│   │   └── alerts.py            # Telegram alerts
+│   │
+│   └── db/
+│       ├── __init__.py
+│       ├── supabase.py
+│       ├── models.py
+│       └── migrations/
 │
 ├── tests/
-│ ├── conftest.py
-│ ├── golden_questions/
-│ │ ├── questions.yaml # Template test cases (tenant-agnostic)
-│ │ └── runner.py # Eval runner
-│ ├── test_routing.py
-│ ├── test_memory.py
-│ ├── test_grounding.py
-│ ├── test_tools.py
-│ └── test_agent.py
+│   ├── conftest.py
+│   ├── golden_questions/
+│   │   ├── questions.yaml
+│   │   └── runner.py
+│   ├── test_agent.py
+│   ├── test_routing.py
+│   ├── test_memory.py
+│   ├── test_grounding.py
+│   ├── test_plugins.py
+│   ├── test_subagents.py
+│   └── test_n8n.py
 │
 ├── configs/
-│ ├── litellm_config.yaml # 3-tier model config
-│ ├── defaults/ # Default configs (overridable per tenant)
-│ │ ├── intents.yaml # Base intent clusters (generic)
-│ │ ├── tools.yaml # Tool permissions + trimming defaults
-│ │ ├── channels.yaml # Channel config
-│ │ └── prompt_template.yaml # Base system prompt template
-│ └── tenants/ # Per-tenant overrides
-│ └── example_tenant/
-│ ├── tenant.yaml # Business name, language, tone, domain
-│ ├── intents.yaml # Tenant-specific intents + example utterances
-│ ├── tools.yaml # Which tools enabled, custom permissions
-│ ├── risk_mapping.yaml # Which intents are high-risk for this business
-│ └── kb_seed.yaml # Initial knowledge base content
+│   ├── litellm_config.yaml      # 3-tier model routing
+│   ├── nexus.yaml               # Core Nexus settings
+│   ├── intents/
+│   │   ├── personal.yaml        # Personal assistant intents
+│   │   └── subagent_base.yaml   # Base intents for sub-agents
+│   ├── plugins/
+│   │   ├── available.yaml       # All known plugins
+│   │   └── enabled.yaml         # User's active plugins
+│   └── subagents/               # Sub-agent configs (created at runtime)
+│       └── example_bot/
+│           ├── config.yaml
+│           ├── intents.yaml
+│           └── kb_seed.yaml
 │
 └── scripts/
-├── seed_kb.py ├── run_evals.py ├── calibrate.py └── onboard_tenant.py # Populate KB (from tenant config)
-# Run golden questions
-# Weekly confidence calibration
-# CLI: create new tenant from template
-Architecture Rules (NON-NEGOTIABLE)
-1. Tenant Isolation
-Every request carries a tenant_id
-All DB queries scoped via RLS ( tenant_memberships table)
-RLS Policy: EXISTS(SELECT 1 FROM tenant_memberships tm WHERE tm.user_id =
-auth.uid() AND tm.tenant_id = table.tenant_id)
-Cache keys prefixed: tenant:{id}:...
-Separate Langfuse project per tenant (Phase 2+)
-System prompt assembled from: base template + tenant-specific variables
-Intent clusters loaded per tenant
-Tool permissions configurable per tenant
-2. Three-Tier Model Routing
-Tier 1 (70%): DeepSeek V3.2 / Gemini Flash → $0.14-0.30/1M tokens
-Tier 2 (25%): Claude Haiku / GPT-4.1 Mini → $0.80-2.00/1M tokens
-Tier 3 (5%): Claude Sonnet / GPT-5 → $3-10/1M tokens
-3. Routing Pipeline (4 Steps)
-1. 2. 3. 4. Keyword Pre-Filter (free, <1ms): configurable keyword→tier mapping per tenant
-Semantic Router (free, <10ms): Embedding similarity vs tenant-specific intent
-clusters. Confidence ≥ threshold → direct route
-LLM Classifier ($0.001, ~500ms): Only for ambiguous queries (15-25%)
-Auto-Escalation: If confidence <0.7 after response → next tier. Max 1, then human.
-4. Two-Dimensional Routing: Complexity × Risk
-Risk mapping is configurable per tenant – which intents are “high risk” depends on
-the business.
-5. Heuristic Confidence Formula
-confidence = (
-0.30 * rag_similarity_score +
-0.10 * rag_coverage +
-0.20 * tool_success_rate +
-0.25 * validator_pass + 0.15 * citation_coverage
-# binary: 1.0 or 0.0
-)
-Weights calibratable per tenant (weekly calibration loop). AUTO-LOW: Hard-facts
-without citations → confidence = 0.3
-6. Three-Layer Memory (MANDATORY)
-Layer 1: Last N Turns (raw) → ~400 tokens
-Layer 2: Running Summary → ~200 tokens
-Layer 3: RAG Snippets (relevant) → ~300 tokens (tenant-scoped)
+    ├── setup.sh                 # One-command setup
+    ├── run_evals.py
+    └── calibrate.py
+```
+
+## Grounding Modes
+
+The agent operates in different grounding modes depending on context:
+
+```python
+class GroundingMode(str, Enum):
+    STRICT = "strict"    # Sub-agents: ONLY KB facts, citations mandatory
+    HYBRID = "hybrid"    # Personal with KB: KB preferred, LLM knowledge allowed (marked)
+    OPEN = "open"        # Personal general: Full LLM capabilities, KB optional
+```
+
+**How it works in practice:**
+
+- You ask “What’s on my calendar tomorrow?” → OPEN mode (tool call, no KB needed)
+- You ask “What’s the cancellation policy?” and you have a KB → HYBRID (checks KB first)
+- Your Nailschool sub-agent gets asked “What’s the price?” → STRICT (only KB, with citation)
+- You ask “Explain quantum physics” → OPEN mode (LLM knowledge, no grounding needed)
+
+**Mode selection is automatic:**
+
+- Core Nexus agent: HYBRID (default) or OPEN (if no KB loaded)
+- Sub-agents: STRICT (always, that’s the point of business bots)
+- Override per intent possible in config
+
+## Plugin System (MCP-based)
+
+Every integration is an MCP server. Users install what they need.
+
+### Built-in Plugins (ship with Nexus)
+
+|Plugin            |Capabilities                            |Always loaded?|
+|------------------|----------------------------------------|--------------|
+|`knowledge_base`  |Search personal KB, add/remove entries  |Yes           |
+|`reminders`       |Set/list/cancel reminders (Redis-backed)|Yes           |
+|`web_search`      |Search the web (via SearXNG or API)     |Yes           |
+|`human_escalation`|“I don’t know” fallback                 |Yes           |
+
+### First-Party Integrations (one-command install)
+
+|Plugin      |Capabilities                                       |Auth   |
+|------------|---------------------------------------------------|-------|
+|`gmail`     |Read, search, send, label, summarize emails        |OAuth2 |
+|`gcalendar` |Read, create, update, delete events; find free time|OAuth2 |
+|`n8n`       |List, trigger, create, edit, delete workflows      |API Key|
+|`notion`    |Read/write pages, query databases                  |OAuth2 |
+|`filesystem`|Read/write local files (sandboxed directory)       |None   |
+
+### n8n Integration (First-Class)
+
+n8n is special because it’s a force multiplier – Nexus can use n8n to do things it can’t do natively.
+
+**Three levels of n8n interaction:**
+
+1. **Trigger**: “Run my weekly report workflow” → executes existing workflow
+1. **Read**: “What workflows do I have?” → lists and describes workflows
+1. **Create**: “Build a workflow that monitors my inbox for invoices and saves them to Google Drive” → generates n8n workflow JSON via API
+
+**n8n workflow creation flow:**
+
+```
+User: Create a workflow that checks my Gmail every morning for
+      newsletters and summarizes them in Notion
+
+Nexus thinks:
+  1. Trigger node: Cron, every day 08:00
+  2. Gmail node: Search for label:newsletter, newer_than:1d
+  3. AI node: Summarize each email (using Nexus's own LLM)
+  4. Notion node: Create page in "Newsletter Summaries" database
+
+Nexus: Here's the workflow I'll create:
+  📋 "Daily Newsletter Digest"
+  1. ⏰ Every day at 08:00
+  2. 📧 Fetch newsletters from Gmail
+  3. 🤖 Summarize with AI
+  4. 📝 Save to Notion
+
+  [✅ Create & Activate] [✏️ Modify] [❌ Cancel]
+
+User: Create & Activate
+Nexus: ✅ Workflow created and active in n8n.
+       First run: Tomorrow 08:00
+```
+
+### Community Plugins (future)
+
+Anyone can build an MCP server and share it. Nexus discovers and installs them.
+
+## Sub-Agent System
+
+Sub-agents are isolated chatbot instances that Nexus creates and manages for you.
+
+```python
+class SubAgent(BaseModel):
+    id: str
+    name: str                     # "Nailschool Bot"
+    owner_id: str                 # Your Nexus user ID
+    grounding_mode: Literal["strict"] = "strict"  # Always strict
+    channel: str                  # "whatsapp", "telegram", "web"
+    channel_config: dict          # Bot token, phone number, etc.
+    kb_namespace: str             # Isolated KB partition
+    system_prompt: str            # Business-specific prompt
+    intents: dict                 # Business-specific intents
+    tools_enabled: list[str]      # Subset of available tools
+    active: bool
+```
+
+**Creating a sub-agent via Telegram:**
+
+```
+You: Create a customer service bot for my nail school
+
+Nexus: I'll set up a business chatbot. Let me ask a few questions:
+
+  1. What's the business name?
+You: Beauty & Nailschool Bochum
+
+  2. What channel should it run on?
+  [Telegram] [WhatsApp] [Web Widget]
+You: WhatsApp
+
+  3. What should it handle?
+  [FAQ / Pricing] [Appointments] [Complaints] [All of these]
+You: All of these
+
+  4. Can you share your price list and business info?
+     (Send as text, file, or link – I'll build the KB)
+You: [sends price list PDF]
+
+Nexus: ✅ Sub-agent "Nailschool Bot" created!
+  📋 KB: 24 entries from your price list
+  💬 Channel: WhatsApp (needs phone number setup)
+  🧠 Mode: Strict grounding (only answers from KB)
+
+  Next steps:
+  • /subagent nailschool connect – to link WhatsApp number
+  • /subagent nailschool test – to test with sample questions
+  • /subagent nailschool kb add – to add more knowledge
+```
+
+**Managing sub-agents:**
+
+- `/subagents` – list all your bots
+- `/subagent {name} status` – stats, costs, recent conversations
+- `/subagent {name} kb add` – add knowledge
+- `/subagent {name} pause/resume` – toggle active
+- `/subagent {name} logs` – recent conversations + decision logs
+
+## Architecture Rules
+
+### 1. Three-Tier Model Routing
+
+```
+Tier 1 (70%): DeepSeek V3.2 / Gemini Flash  → cheapest
+Tier 2 (25%): Claude Haiku / GPT-4.1 Mini   → balanced
+Tier 3 (5%):  Claude Sonnet / GPT-5          → most capable
+```
+
+### 2. Routing Pipeline
+
+1. Keyword Pre-Filter (free, <1ms)
+1. Semantic Router (free, <10ms, embedding similarity)
+1. LLM Classifier (only for ambiguous, ~$0.001)
+1. Auto-Escalation (confidence <0.7 → next tier, max 1)
+
+### 3. Three-Layer Memory
+
+```
+Layer 1: Last N Turns       → ~400 tokens (Redis)
+Layer 2: Running Summary    → ~200 tokens (compressed every 3 msgs)
+Layer 3: Semantic Recall    → ~300 tokens (pgvector – personal KB + conversation history)
 Total budget: ~1,200 tokens HARD LIMIT
-7. Grounding: Hard Facts vs Soft Content
-Hard Facts: ONLY from KB/Tools. MUST have citation-ID.
-Soft Content: LLM may formulate freely. No new facts.
-Validator: deterministic (Regex + Entity-List → citation check → 1 repair → fail-fast)
-Entity registry auto-synced from tenant’s KB
-8. Machine-Readable Citations
-{
-"answer": "...",
-"citations": [{"id": "KB-{CAT}-{NUM}", "fact": "...", "source": "..."}]
-}
-9. Dynamic Tool Loading
-Only load tool schemas for detected intent (saves 60-80% tokens)
-Intent-to-tool mapping configurable per tenant
-Core tools always loaded: human_escalation, kb_search
-10. Tool-Result Trimming
-Per-tool limits configurable: max_bytes, top_n, field_
-whitelist
-Global cap: 4,096 bytes across ALL tool results per agent loop
-11. Tool Firewall
-User text NEVER as tool argument directly
-Structured calls only (Pydantic validation)
-No tool invention (whitelist only)
-Injection pattern detection
-12. Tool Permissions (3 Layers, per tenant)
-Scopes (read/write), Channel Allowlists, Confirmation Gates
-13. PII Handling
-Minimize before LLM, secure store (Supabase RLS), synthetic log redaction (Faker)
-14. EU AI Act: KI-Disclosure from Day 1 (configurable per
-tenant/channel)
-15. Proactive Jobs: per tenant, configurable, Auto-Send default OFF
-16. Decision Logs: 18 fields per request (including tenant_id)
-System Prompt Template
-Assembled dynamically per request:
-[BASE TEMPLATE] (role definition, grounding rules, citation format, escalation rules)
-+
-+
-+
-[TENANT VARIABLES] (business name, tone, language, domain instructions)
-[LOADED TOOL SCHEMAS] (only relevant tools for this intent)
-[CONTEXT] (memory: last turns + summary + RAG snippets)
-Example tenant config ( configs/tenants/{id}/tenant.yaml ):
-business_name: "Example Business"
-business_type: "retail store"
-language: "de"
-tone: "friendly, professional"
-domain_instructions: |
-You are the AI assistant for this business.
-Adapt this section for each client.
-escalation_contact: "Owner via Telegram"
-ki_disclosure: " Ich bin ein KI-Assistent von {business_name}."
-Cost Targets (per tenant, configurable)
-Monthly default: 13-23€ normal, max 35-45€ worst case
-Daily LLM cap: configurable (default $2.00)
-Per resolved conversation: <0.05€
-Code Style
-Python 3.12+, async/await everywhere
-Type hints mandatory (Pydantic models for all data)
-CRITICAL: No business-specific logic hardcoded. Everything via
-config/tenant.
-Tests: pytest + pytest-asyncio, mocks for external services
-Logging: structlog (JSON)
-Key Libraries
+```
+
+Plus: **Personal Facts Store** – long-term facts about the user:
+
+- “User prefers German”, “User’s n8n instance is at http://localhost:5678”
+- Extracted automatically from conversations, stored in Supabase
+- Injected into system prompt when relevant
+
+### 4. Heuristic Confidence
+
+```python
+confidence = 0.30*rag + 0.10*coverage + 0.20*tool_success + 0.25*validator + 0.15*citation
+```
+
+- In OPEN mode: validator weight set to 0, citation weight redistributed
+- In STRICT mode (sub-agents): full formula, auto-low without citations
+
+### 5. Plugin Security
+
+- Tool Firewall: structured calls only, Pydantic validation, injection detection
+- Permission Scopes: read/write per plugin
+- Confirmation Gates: destructive actions require user confirmation
+- Sandboxed: plugins can’t access each other’s data
+- User text NEVER passed directly as tool argument
+
+### 6. Dynamic Tool Loading
+
+- Only load plugin schemas relevant to detected intent
+- Core plugins always loaded (~400 tokens)
+- Saves 60-80% tool tokens per request
+
+### 7. Tool-Result Trimming
+
+- Per-plugin limits (configurable)
+- Global cap: 4,096 bytes across all tool results per loop
+
+### 8. Sub-Agent Isolation
+
+- Each sub-agent: own KB namespace, own system prompt, own intents
+- Sub-agents run in STRICT grounding mode (always)
+- Sub-agents share the LLM gateway but have separate cost tracking
+- Sub-agent conversations are NOT visible to core Nexus (privacy)
+- Sub-agents can’t call personal plugins (Gmail, Calendar, etc.)
+
+### 9. PII Handling
+
+- Personal data: encrypted at rest in Supabase
+- Log redaction: synthetic replacement before Langfuse
+- Sub-agent conversations: PII minimized (customer IDs, not names)
+
+### 10. EU AI Act
+
+- KI-Disclosure on all channels (configurable text)
+- Sub-agents: mandatory disclosure in first message + channel bio
+
+## Decision Logs (every request)
+
+Fields: request_id, user_id, is_subagent, subagent_id, intent, router_confidence,
+tier, risk_level, tools_called, tools_success, rag_top_score, cache_hit,
+grounding_mode, validator_pass, citation_count, confidence_score,
+agent_loops, total_tokens, cost_usd, latency_ms
+
+## Onboarding Flow (Telegram-based, no config files)
+
+First time `/start`:
+
+```
+Nexus: 👋 Hey! I'm Nexus, your personal AI agent.
+       I can help you with emails, calendar, automations, and more.
+
+       Let's set up in 2 minutes:
+
+       1. Which LLM would you like to use?
+       [OpenRouter Free] [Own OpenAI Key] [Own Anthropic Key] [Other]
+
+User: OpenRouter Free
+
+Nexus: 2. What should I call you?
+User: Jerome
+
+Nexus: 3. Which language do you prefer?
+       [Deutsch] [English] [Both]
+User: Both
+
+Nexus: ✅ Setup complete, Jerome!
+
+       I ship with these built-in capabilities:
+       ✅ Reminders & To-Dos
+       ✅ Web Search
+       ✅ Personal Knowledge Base
+
+       Want to connect more services?
+       /connect gmail     – Read & send emails
+       /connect calendar  – Manage your schedule
+       /connect n8n       – Build automations
+       /connect notion    – Notes & databases
+
+       Or just start talking to me! Try:
+       "Remind me to buy milk tomorrow at 9"
+       "What's the latest news about AI?"
+       "Create a sub-agent for my business"
+```
+
+## Cost Targets
+
+- Self-hosted: only LLM API costs (OpenRouter free tier possible for light use)
+- Normal personal use: ~5-15€/mo in API costs
+- With sub-agents: +5-10€/mo per active sub-agent
+- Daily LLM cap: configurable (default $2.00)
+
+## Code Style
+
+- Python 3.12+, async/await everywhere
+- Type hints mandatory (Pydantic models)
+- No hardcoded business logic – everything via config/plugins
+- Tests: pytest + pytest-asyncio, mocks for external services
+- Logging: structlog (JSON)
+
+## Key Libraries
+
+```
 litellm, fastapi, uvicorn, aiogram>=3.0, sentence-transformers,
 supabase-py, redis, langfuse, pydantic>=2.0, pydantic-settings,
 apscheduler, semantic-router, faker, structlog, pyyaml, tiktoken,
-pytest, pytest-asyncio
-Interfaces Between Modules
-TenantContext (tenant → everything)
-class TenantContext(BaseModel):
-tenant_id: str
-config: TenantConfig # From configs/tenants/{id}/
-prompt_variables: dict # Business name, tone, domain instructions
-active_tools: list[str] # Which tools this tenant has enabled
-intent_clusters: dict # Tenant-specific intents
-risk_mapping: dict[str, str] # intent → risk level override
-RoutingDecision (routing → agent)
-class RoutingDecision(BaseModel):
-intent: str
-tier: Literal[1, 2, 3]
-risk_level: Literal["low", "medium", "high", "critical"]
-confidence: float
-requires_confirmation: bool
-tools_to_load: list[str]
-source: Literal["keyword", "semantic_router", "llm_classifier"]
-UnifiedMessage (channels → agent)
+httpx, pytest, pytest-asyncio
+```
+
+## Interfaces Between Modules
+
+### UnifiedMessage (channels → agent)
+
+```python
 class UnifiedMessage(BaseModel):
-id: str
-channel: Literal["whatsapp", "telegram", "web", "email"]
-sender_id: str
-tenant_id: str
-text: str
-media: list[MediaAttachment] | None
-timestamp: datetime
-metadata: dict
-AgentResponse (agent → channels)
+    id: str
+    channel: Literal["telegram", "whatsapp", "web"]
+    sender_id: str
+    text: str
+    media: list[MediaAttachment] | None
+    timestamp: datetime
+    is_subagent_message: bool = False
+    subagent_id: str | None = None
+    metadata: dict = {}
+```
+
+### RoutingDecision (routing → agent)
+
+```python
+class RoutingDecision(BaseModel):
+    intent: str
+    tier: Literal[1, 2, 3]
+    risk_level: Literal["low", "medium", "high", "critical"]
+    confidence: float
+    requires_confirmation: bool
+    plugins_to_load: list[str]
+    grounding_mode: GroundingMode
+    source: Literal["keyword", "semantic_router", "llm_classifier"]
+```
+
+### AgentResponse (agent → channels)
+
+```python
 class AgentResponse(BaseModel):
-text: str
-citations: list[Citation]
-ui_component: UIComponent | None
-fallback_text: str
-confidence: float
-decision_log: DecisionLog
-ContextBundle (memory → agent)
+    text: str
+    citations: list[Citation] = []
+    ui_component: UIComponent | None = None
+    fallback_text: str
+    confidence: float
+    needs_confirmation: bool = False
+    confirmation_payload: dict | None = None   # For inline keyboard actions
+    decision_log: DecisionLog
+```
+
+### ContextBundle (memory → agent)
+
+```python
 class ContextBundle(BaseModel):
-last_turns: list[Turn]
-summary: str
-rag_snippets: list[Chunk]
-total_tokens: int # Must be ≤1,200
-GroundingResult (grounding → agent)
-class GroundingResult(BaseModel):
-passed: bool
-citations: list[Citation]
-hard_facts_found: int
-hard_facts_cited: int
-needs_repair: bool
-repaired_text: str | Non
+    last_turns: list[Turn]
+    summary: str
+    rag_snippets: list[Chunk]
+    personal_facts: list[str]    # Long-term user facts
+    total_tokens: int            # Must be ≤1,200
+```
