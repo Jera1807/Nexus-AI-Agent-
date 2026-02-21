@@ -79,3 +79,13 @@ Calibration:
 ```bash
 python scripts/calibrate.py --input /tmp/decision_logs.json --output calibration_report.json --current-threshold 0.35
 ```
+
+## Architektur-Delta zum Session-Plan
+
+Da wir lokal bewusst mit in-memory Baselines gearbeitet haben, gibt es ein Delta zum Produktionsziel aus `claude.md` und `nexus_session_plan.md`.
+
+Eine konkrete Umbau-Matrix inkl. Reihenfolge findest du hier:
+
+- `docs/architecture_rebuild_plan.md`
+
+Kurz: Als erster Schritt wurden Runtime-Adapter (`local|production`) eingeführt, sodass wir Supabase/Langfuse/Redis sauber hinter Interfaces nachziehen können, ohne den lokalen Entwicklungsfluss zu brechen.

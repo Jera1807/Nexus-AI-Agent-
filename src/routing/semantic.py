@@ -47,13 +47,10 @@ def semantic_route(message: str, intents_config: dict[str, Any]) -> RoutingDecis
         return None
 
     meta = intents[best_intent]
-    risk = RiskLevel(meta.get("risk_level", RiskLevel.MEDIUM.value))
     return RoutingDecision(
         intent=best_intent,
         tier=Tier(meta.get("default_tier", Tier.TIER_2.value)),
-        risk_level=risk,
+        risk_level=RiskLevel(meta.get("risk_level", RiskLevel.MEDIUM.value)),
         confidence=clamp_confidence(0.35 + best_overlap),
-        requires_confirmation=risk in {RiskLevel.HIGH, RiskLevel.CRITICAL},
-        source="semantic_router",
         rationale=f"semantic overlap match for intent '{best_intent}'",
     )

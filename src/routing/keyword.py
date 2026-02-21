@@ -55,7 +55,5 @@ def keyword_route(message: str, intents_config: dict[str, Any]) -> RoutingDecisi
         tier=tier,
         risk_level=risk_level,
         confidence=round(min(0.95, 0.4 + best_score), 3),
-        requires_confirmation=risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL},
-        source="keyword",
         rationale=rationale,
     )

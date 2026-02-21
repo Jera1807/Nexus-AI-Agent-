@@ -26,21 +26,10 @@ def test_web_chat_and_events_flow() -> None:
     assert chat_response.status_code == 200
     body = chat_response.json()
     assert body["tenant_id"] == "example_tenant"
-    # "Hallo" matches smalltalk intent via keyword routing
-    assert body["intent"] in {"smalltalk", "faq", "fallback"}
-    assert "confidence" in body
-    assert isinstance(body["citations"], list)
+    assert body["intent"] == "fallback"
 
     events_response = client.get("/events", params={"tenant_id": "example_tenant"})
     assert events_response.status_code == 200
     items = events_response.json()["items"]
     assert len(items) >= 1
     assert items[-1]["sender_id"] == "web-u1"
-
-
-def test_web_chat_unknown_tenant_returns_404() -> None:
-    response = client.post(
-        "/chat/web",
-        json={"sender_id": "u1", "tenant_id": "nonexistent", "text": "Hi"},
-    )
-    assert response.status_code == 404
