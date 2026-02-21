@@ -1,0 +1,39 @@
+{
+  "questions": [
+    {
+      "input": "Wie sind eure Öffnungszeiten?",
+      "expected_intent": "faq",
+      "expected_tier": "tier_1",
+      "must_have_citations": false,
+      "max_latency_ms": 200
+    },
+    {
+      "input": "Ich möchte einen Termin buchen",
+      "expected_intent": "booking",
+      "expected_tier": "tier_2",
+      "must_have_citations": false,
+      "max_latency_ms": 200
+    },
+    {
+      "input": "Ich muss den Termin absagen",
+      "expected_intent": "cancellation",
+      "expected_tier": "tier_2",
+      "must_have_citations": false,
+      "max_latency_ms": 200
+    },
+    {
+      "input": "Was kostet der Kurs?",
+      "expected_intent": "faq",
+      "expected_tier": "tier_1",
+      "must_have_citations": false,
+      "max_latency_ms": 200
+    },
+    {
+      "input": "Kann ich mich anmelden?",
+      "expected_intent": "booking",
+      "expected_tier": "tier_2",
+      "must_have_citations": false,
+      "max_latency_ms": 200
+    }
+  ]
+}
