@@ -37,9 +37,10 @@ Multi-tenant AI-Agent Framework für den produktiven Einsatz bei KMU.
 - Session 7 (Observability baseline: logging + PII + alerts): **~30%**
 - Session 8 (Proactive baseline: consent + jobs + scheduler): **~25%**
 - Session 9 (Agent/DB/WhatsApp baselines): **~25%**
-- Session 10+ (advanced Evals, production integrations): **~10%**
+- Session 10 (Calibration CLI baseline): **~35%**
+- Session 11+ (production integrations, advanced Evals/channels): **~10%**
 
-Gesamtfortschritt über Sessions 0–9: **ca. 77%**.
+Gesamtfortschritt über Sessions 0–10: **ca. 80%**.
 
 ## Wie lege ich einen neuen Tenant an?
 
@@ -69,4 +70,10 @@ python scripts/onboard_tenant.py --tenant-id my_tenant --name "My Business"
 Eval Runner:
 ```bash
 python scripts/run_evals.py --questions tests/golden_questions/questions.yaml --output eval_report.json
+```
+
+
+Calibration:
+```bash
+python scripts/calibrate.py --input /tmp/decision_logs.json --output calibration_report.json --current-threshold 0.35
 ```
