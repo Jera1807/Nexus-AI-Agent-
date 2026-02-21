@@ -32,10 +32,17 @@ Multi-tenant AI-Agent Framework für den produktiven Einsatz bei KMU.
 - Session 2 (Routing Core: keyword + semantic + confidence + fallback): **~45%**
 - Session 3 (Memory Core: working + summary + semantic + context budget): **~35%**
 - Session 4 (Grounding Core: citations + validator + repair + entity registry): **~30%**
-- Session 5 (Tools Core: registry + trimming + firewall + permissions): **~30%**
-- Session 6+ (Channels, Observability, Evals): **~5%**
+- Session 5 (Tools Core: registry + trimming + firewall + permissions + tool servers): **~45%**
+- Session 6 (Onboarding/Evals + Channels basics): **~40%**
+- Session 7 (Observability baseline: logging + PII + alerts): **~30%**
+- Session 8 (Proactive baseline: consent + jobs + scheduler): **~25%**
+- Session 9 (Agent/DB/WhatsApp baselines): **~25%**
+- Session 10 (Calibration CLI baseline): **~35%**
+- Session 11 (API integration baseline: /chat/web + event storage): **~25%**
+- Session 12 (advanced eval checks + smoke/golden suites): **~30%**
+- Session 13+ (production integrations, deeper channel integrations): **~10%**
 
-Gesamtfortschritt über Sessions 0–8: **ca. 52%**.
+Gesamtfortschritt über Sessions 0–12: **ca. 86%**.
 
 ## Wie lege ich einen neuen Tenant an?
 
@@ -53,3 +60,22 @@ Gesamtfortschritt über Sessions 0–8: **ca. 52%**.
    ```bash
    python -m pytest tests/test_tenant.py tests/test_routing.py tests/test_agent.py -v
    ```
+
+
+## CLI (neu)
+
+Tenant Scaffold:
+```bash
+python scripts/onboard_tenant.py --tenant-id my_tenant --name "My Business"
+```
+
+Eval Runner:
+```bash
+python scripts/run_evals.py --questions tests/golden_questions/questions.yaml --suite smoke --tenant example_tenant --output eval_report.json
+```
+
+
+Calibration:
+```bash
+python scripts/calibrate.py --input /tmp/decision_logs.json --output calibration_report.json --current-threshold 0.35
+```
