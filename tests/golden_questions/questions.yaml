@@ -1,0 +1,24 @@
+{
+  "questions": [
+    {
+      "input": "Wie sind eure Öffnungszeiten?",
+      "expected_intent": "faq"
+    },
+    {
+      "input": "Ich möchte einen Termin buchen",
+      "expected_intent": "booking"
+    },
+    {
+      "input": "Ich muss den Termin absagen",
+      "expected_intent": "cancellation"
+    },
+    {
+      "input": "Was kostet der Kurs?",
+      "expected_intent": "faq"
+    },
+    {
+      "input": "Kann ich mich anmelden?",
+      "expected_intent": "booking"
+    }
+  ]
+}

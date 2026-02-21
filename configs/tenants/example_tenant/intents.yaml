@@ -1,0 +1,8 @@
+{
+  "intents": {
+    "booking": {
+      "keywords": ["schulung buchen", "kurs buchen", "anmeldung"],
+      "default_tier": "tier_2"
+    }
+  }
+}
