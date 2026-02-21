@@ -22,10 +22,13 @@ def classify_with_llm_fallback(message: str, intents_config: dict[str, Any]) -> 
     else:
         intent, meta = next(iter(intents.items()), (DEFAULT_INTENT, {}))
 
+    risk = RiskLevel(meta.get("risk_level", RiskLevel.MEDIUM.value))
     return RoutingDecision(
         intent=intent,
         tier=Tier(meta.get("default_tier", Tier.TIER_2.value)),
-        risk_level=RiskLevel(meta.get("risk_level", RiskLevel.MEDIUM.value)),
+        risk_level=risk,
         confidence=0.45,
+        requires_confirmation=risk in {RiskLevel.HIGH, RiskLevel.CRITICAL},
+        source="llm_classifier",
         rationale="llm fallback placeholder decision",
     )

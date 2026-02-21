@@ -1,45 +1,56 @@
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclass(frozen=True)
-class Settings:
-    app_env: str = os.getenv("APP_ENV", "development")
-    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    host: str = os.getenv("HOST", "0.0.0.0")
-    port: int = int(os.getenv("PORT", "8000"))
+    app_env: str = "development"
+    log_level: str = "INFO"
 
-    litellm_base_url: str = os.getenv("LITELLM_BASE_URL", "http://localhost:4000")
-    litellm_api_key: str = os.getenv("LITELLM_API_KEY", "changeme")
+    host: str = "0.0.0.0"
+    port: int = 8000
 
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    litellm_base_url: str = "http://localhost:4000"
+    litellm_api_key: str = "changeme"
 
-    supabase_url: str = os.getenv("SUPABASE_URL", "")
-    supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    supabase_db_url: str = os.getenv("SUPABASE_DB_URL", "")
+    redis_url: str = "redis://localhost:6379/0"
 
-    langfuse_host: str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
-    langfuse_public_key: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-    langfuse_secret_key: str = os.getenv("LANGFUSE_SECRET_KEY", "")
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_db_url: str = ""
 
-    default_tenant_id: str = os.getenv("DEFAULT_TENANT_ID", "example_tenant")
+    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
 
-    def __post_init__(self) -> None:
-        if self.app_env.lower() in {"prod", "production"}:
-            missing: list[str] = []
-            if not self.litellm_api_key or self.litellm_api_key == "changeme":
-                missing.append("LITELLM_API_KEY")
-            if not self.supabase_service_role_key:
-                missing.append("SUPABASE_SERVICE_ROLE_KEY")
-            if not self.langfuse_secret_key:
-                missing.append("LANGFUSE_SECRET_KEY")
-            if missing:
-                raise ValueError(
-                    "Missing/unsafe production credentials: " + ", ".join(missing)
-                )
+    default_tenant_id: str = "example_tenant"
+
+    daily_llm_budget_usd: float = 2.00
+
+    @field_validator("app_env", mode="before")
+    @classmethod
+    def _normalise_env(cls, v: str) -> str:
+        return v.strip().lower()
+
+    def check_production_secrets(self) -> list[str]:
+        """Return list of missing/unsafe secrets for production."""
+        if self.app_env not in {"prod", "production"}:
+            return []
+        missing: list[str] = []
+        if not self.litellm_api_key or self.litellm_api_key == "changeme":
+            missing.append("LITELLM_API_KEY")
+        if not self.supabase_service_role_key:
+            missing.append("SUPABASE_SERVICE_ROLE_KEY")
+        if not self.langfuse_secret_key:
+            missing.append("LANGFUSE_SECRET_KEY")
+        return missing
 
 
 settings = Settings()
