@@ -1,37 +1,50 @@
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-@dataclass(frozen=True)
-class Settings:
-    app_env: str = os.getenv("APP_ENV", "development")
-    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    host: str = os.getenv("HOST", "0.0.0.0")
-    port: int = int(os.getenv("PORT", "8000"))
+    app_env: str = "development"
+    log_level: str = "INFO"
 
-    litellm_base_url: str = os.getenv("LITELLM_BASE_URL", "http://localhost:4000")
-    litellm_api_key: str = os.getenv("LITELLM_API_KEY", "changeme")
+    host: str = "0.0.0.0"
+    port: int = 8000
 
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    litellm_base_url: str = "http://localhost:4000"
+    litellm_api_key: str = "changeme"
 
-    supabase_url: str = os.getenv("SUPABASE_URL", "")
-    supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    supabase_db_url: str = os.getenv("SUPABASE_DB_URL", "")
+    redis_url: str = "redis://localhost:6379/0"
 
-    langfuse_host: str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
-    langfuse_public_key: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
-    langfuse_secret_key: str = os.getenv("LANGFUSE_SECRET_KEY", "")
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_db_url: str = ""
 
-    default_tenant_id: str = os.getenv("DEFAULT_TENANT_ID", "example_tenant")
-    runtime_mode: str = os.getenv("RUNTIME_MODE", "local")
+    langfuse_host: str = "https://cloud.langfuse.com"
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
 
-    def __post_init__(self) -> None:
-        if self.runtime_mode not in {"local", "production"}:
+    default_tenant_id: str = "example_tenant"
+    runtime_mode: str = "local"
+
+    telegram_bot_token: str = ""
+    n8n_url: str = ""
+    n8n_api_key: str = ""
+    whisper_model: str = "base"
+    daily_budget_usd: float = 2.0
+
+    @field_validator("runtime_mode")
+    @classmethod
+    def validate_runtime_mode(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"local", "production"}:
             raise ValueError("RUNTIME_MODE must be either 'local' or 'production'.")
+        return normalized
 
+    @model_validator(mode="after")
+    def validate_production_credentials(self) -> Settings:
         if self.app_env.lower() in {"prod", "production"}:
             missing: list[str] = []
             if not self.litellm_api_key or self.litellm_api_key == "changeme":
@@ -44,6 +57,7 @@ class Settings:
                 raise ValueError(
                     "Missing/unsafe production credentials: " + ", ".join(missing)
                 )
+        return self
 
 
 settings = Settings()

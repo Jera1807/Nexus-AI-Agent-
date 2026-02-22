@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from pydantic import BaseModel, Field
 
-@dataclass
-class UnifiedMessage:
+
+class UnifiedMessage(BaseModel):
     channel: str
     sender_id: str
     tenant_id: str
     text: str
     message_id: str | None = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
-    metadata: dict[str, Any] = field(default_factory=dict)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    voice_audio: bytes | None = None
+    is_subagent_message: bool = False
+    subagent_id: str | None = None
 
 
 def from_web_payload(payload: dict[str, Any]) -> UnifiedMessage:
