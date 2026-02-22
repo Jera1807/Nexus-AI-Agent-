@@ -26,7 +26,7 @@ def test_web_chat_and_events_flow() -> None:
     assert chat_response.status_code == 200
     body = chat_response.json()
     assert body["tenant_id"] == "example_tenant"
-    assert body["intent"] == "fallback"
+    assert body["intent"] == "general"
 
     events_response = client.get("/events", params={"tenant_id": "example_tenant"})
     assert events_response.status_code == 200
