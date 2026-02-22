@@ -1,441 +1,705 @@
-# Project Nexus – Claude Code Session Plan
+# Project Nexus – Session Plan (FINAL)
 
-> Für jede Session: Öffne Claude Code im Projekt-Root und paste den Prompt.
-> Claude Code liest automatisch CLAUDE.md als Kontext.
+> **Workflow:** Claude orchestrates → you paste session prompt into Codex → Codex builds.
+> Codex reads CLAUDE.md automatically from repo root.
+> Each session prompt is self-contained: paste it, Codex executes.
+> Git commit after each session.
 
------
+---
 
-## Session 0: Repository Setup
+## Session 0: Foundation Refactor
 
-**Ziel:** Lauffähiges Skelett mit Docker, Configs, Projektstruktur.
-
-```
-Lies CLAUDE.md. Erstelle die komplette Projektstruktur:
-
-1. pyproject.toml mit allen Dependencies (siehe CLAUDE.md Key Libraries)
-2. docker-compose.yml: agent (Python), litellm (proxy), redis
-3. .env.example mit allen nötigen Variablen (LLM keys, Telegram token, Supabase URL, Redis, n8n URL)
-4. Komplette src/ Verzeichnisstruktur inkl. __init__.py:
-   agent/, routing/, memory/, grounding/, plugins/, integrations/,
-   channels/, subagents/, onboarding/, observability/, db/
-5. src/config.py: Pydantic Settings
-6. configs/litellm_config.yaml: 3-Tier mit Fallbacks + $2/day Budget
-7. configs/nexus.yaml: Core Settings (language, grounding_mode defaults, etc.)
-8. configs/intents/personal.yaml: Personal Assistant Intents:
-   - mail (check mail, send mail, search mail)
-   - calendar (show events, create event, find free time)
-   - reminder (set reminder, list reminders, cancel reminder)
-   - automation (create workflow, list workflows, run workflow)
-   - knowledge (remember this, what do you know about, search KB)
-   - subagent (create bot, manage bot, bot status)
-   - web_search (search for, look up, what is)
-   - general (greeting, thanks, help, smalltalk)
-   - unknown (fallback)
-9. configs/plugins/available.yaml: All known plugins with metadata
-10. configs/plugins/enabled.yaml: Default enabled (kb, reminders, web_search)
-11. configs/intents/subagent_base.yaml: Base intents for business bots (faq, booking, cancellation, complaint, general)
-12. configs/subagents/example_bot/: Example sub-agent config
-13. tests/conftest.py mit Fixtures
-14. .github/workflows/eval.yml
-15. README.md: "Nexus – Your Personal AI Agent. Self-hosted, open-source."
-    - What is Nexus? (30-second pitch)
-    - Quick Start (docker compose up + Telegram setup)
-    - Connecting Services (Gmail, Calendar, n8n)
-    - Creating Sub-Agents
-    - Plugin Development Guide (kurz)
-16. .gitignore
-17. scripts/setup.sh: One-command setup (copy .env.example, docker compose up)
-
-`docker compose up` soll starten ohne Fehler. Kein Anwendungscode.
-```
-
------
-
-## Session 1: Core Agent + Onboarding
-
-**Ziel:** Agent der in Telegram antwortet + interaktives Erstsetup.
+**Goal:** Migrate existing codebase from business-chatbot to personal-agent foundation.
+No new features yet – just prepare the ground.
 
 ```
-Lies CLAUDE.md. Baue Core Agent + Telegram + Onboarding:
+Read CLAUDE.md completely. This is a REFACTOR session for an existing codebase.
+Do NOT delete working code. Extend and adapt.
 
-1. src/agent/loop.py: Async ReAct Loop
-   - Input: UnifiedMessage + ContextBundle + RoutingDecision
-   - Dynamischer System Prompt (Base + Personal Facts + Plugin Schemas)
-   - LiteLLM Call (Tier aus RoutingDecision)
-   - Structured Output → AgentResponse
-   - Max 3 Loops, 30s Timeout
+TASK 1: Migrate src/config.py from dataclass + os.getenv to pydantic-settings.
+- Keep all existing fields
+- Add: TELEGRAM_BOT_TOKEN, N8N_URL, N8N_API_KEY, WHISPER_MODEL, DAILY_BUDGET_USD
+- Add: RUNTIME_MODE validation (local|production) – already exists, keep it
+- Strict validation for production mode (already exists, keep it)
 
-2. src/agent/prompt.py: Prompt Builder
-   - Base Template: "Du bist Nexus, ein persönlicher AI-Agent. Du kannst Emails lesen,
-     Termine verwalten, Automationen bauen und Sub-Agents erstellen."
-   - Inject: Active plugin schemas, personal facts, conversation context
-   - Grounding-Mode-Aware: In OPEN mode keine Citation-Pflicht, in STRICT schon
+TASK 2: Migrate all dataclasses in these files to Pydantic BaseModel:
+- src/agent/structured.py (AgentResponse)
+- src/routing/models.py (RoutingDecision, Tier, RiskLevel)
+  - ADD: GroundingMode enum (strict, hybrid, open)
+  - ADD: grounding_mode field to RoutingDecision
+  - ADD: plugins_to_load: list[str] field
+  - ADD: should_delegate: bool field
+- src/channels/message.py (UnifiedMessage)
+  - ADD: voice_audio: bytes | None = None
+  - ADD: is_subagent_message: bool = False
+  - ADD: subagent_id: str | None = None
 
-3. src/agent/structured.py: Pydantic Schemas
-   - AgentResponse, Citation, UIComponent, DecisionLog
-   - ConfirmationPayload (für Inline-Keyboard Aktionen)
+TASK 3: Create configs/intents/personal.yaml with ALL intents from CLAUDE.md §9.
+Keep configs/defaults/intents.yaml as-is (used by sub-agents later).
 
-4. src/channels/telegram.py: Telegram Bot (aiogram 3.x)
-   - /start → Onboarding Flow
-   - Nachrichten → UnifiedMessage → Agent → Response
-   - Inline Keyboards für Confirmations
-   - /connect, /subagents, /help Commands
+TASK 4: Create configs/nexus.yaml:
+```yaml
+agent:
+  name: "Nexus"
+  default_language: "both"  # de, en, both
+  grounding_mode_default: "open"
+  max_react_loops: 5
+  react_timeout_seconds: 30
 
-5. src/channels/message.py: UnifiedMessage Model
+budget:
+  daily_cap_usd: 2.00
+  alert_threshold_pct: 80
 
-6. src/onboarding/flow.py: Interaktives Telegram-Setup
-   - Schritt 1: LLM Provider wählen (OpenRouter / eigener Key)
-   - Schritt 2: Name + Sprache
-   - Schritt 3: Speichert in DB/Config
-   - Am Ende: Willkommensnachricht mit verfügbaren Commands
+multi_agent:
+  enabled: true
+  delegation_threshold: 0.6  # confidence below this → consider delegation
+  max_specialists: 3         # max parallel specialist agents
 
-7. src/main.py: FastAPI + Telegram Bot Startup
-
-8. Tests: test_agent.py + test_onboarding.py
-   - Agent antwortet auf "Hallo"
-   - Agent gibt valid AgentResponse zurück
-   - Agent hält Max-Loops ein
-   - Onboarding speichert User-Preferences
-
-`python -m pytest tests/test_agent.py tests/test_onboarding.py`
+plugins:
+  builtin: [knowledge_base, reminders, web_search, human_escalation]
 ```
 
------
-
-## Session 2: Routing + Memory
-
-**Ziel:** Intelligentes Routing + Kontext-Management.
-
-```
-Lies CLAUDE.md. Baue Routing + Memory:
-
-ROUTING:
-1. src/routing/models.py: RoutingDecision mit grounding_mode Feld
-2. src/routing/keyword.py: Keywords aus configs/intents/personal.yaml
-3. src/routing/semantic.py: Embedding Router (multilingual MiniLM)
-   - Intents aus personal.yaml laden
-   - Unknown-Intent Bucket für Drift-Handling
-4. src/routing/llm_classifier.py: Fallback
-5. src/routing/confidence.py: Heuristic mit Grounding-Mode-Awareness
-   - OPEN mode: validator_weight=0, citation redistributed
-   - STRICT mode: full formula
-6. src/routing/__init__.py: route(message) → RoutingDecision
-   - Pipeline: keyword → semantic → llm
-   - Setzt grounding_mode automatisch:
-     - mail/calendar/reminder/automation intents → OPEN
-     - knowledge intents + KB exists → HYBRID
-     - subagent messages → STRICT
-
-MEMORY:
-7. src/memory/working.py: Last N turns (Redis)
-8. src/memory/summary.py: Running Summary (Tier-1 model)
-9. src/memory/semantic.py: RAG from personal KB (pgvector)
-10. src/memory/personal.py: Personal Facts Store
-    - Extrahiert automatisch Fakten aus Gesprächen:
-      "User heißt Jerome", "User's n8n ist auf localhost:5678"
-    - Speichert in Supabase, injiziert in System Prompt
-    - CRUD: User kann Facts manuell hinzufügen/löschen (/facts)
-11. src/memory/context.py: Context Assembler (1,200 Token Budget)
-
-Tests: test_routing.py + test_memory.py
-- "Check my mails" → intent=mail, grounding=OPEN, Tier 1
-- "Remind me tomorrow at 9" → intent=reminder, OPEN, Tier 1
-- "Create a bot for my shop" → intent=subagent, Tier 2
-- "What's quantum physics?" → intent=general, OPEN, Tier 1
-- Memory: Personal facts extracted + recalled
-- Memory: Budget nie überschritten
-- Memory: Tenant-scoped (Sub-Agent sieht nicht personal memory)
-
-`python -m pytest tests/test_routing.py tests/test_memory.py`
+TASK 5: Create configs/policies/guardian.yaml:
+```yaml
+rules:
+  shell_commands:
+    blocked: [rm -rf, mkfs, dd, shutdown, reboot]
+    require_confirmation: [apt install, pip install, docker, systemctl]
+  http_requests:
+    blocked_domains: []
+    require_confirmation_for_new_domains: true
+  file_operations:
+    sandboxed_paths: [/home/nexus/workspace]
+    blocked_paths: [/etc, /usr, /var, /root]
+  risk_levels:
+    low: auto_approve
+    medium: log_and_approve
+    high: require_user_confirmation
+    critical: block_and_alert
 ```
 
------
-
-## Session 3: Plugin System
-
-**Ziel:** MCP-basiertes Plugin-System + Built-in Plugins.
-
-```
-Lies CLAUDE.md. Baue das Plugin-System:
-
-1. src/plugins/manager.py: Plugin Manager
-   - discover() → list available plugins (from configs/plugins/)
-   - install(plugin_id) → activate plugin
-   - enable/disable per user
-   - /connect {plugin} Telegram command handler
-
-2. src/plugins/registry.py: Active Plugin Registry
-   - get_plugins_for_intent(intent) → nur relevante Plugin-Schemas
-   - Core plugins immer geladen (kb, reminders, web_search, escalation)
-
-3. src/plugins/trimming.py: Result Trimming
-   - Per-plugin limits + Global 4KB cap
-
-4. src/plugins/firewall.py: Security
-   - Pydantic validation, injection detection, whitelist only
-
-5. src/plugins/permissions.py: Scopes + Confirmation Gates
-   - Read-Aktionen: kein Confirm nötig
-   - Write-Aktionen: Inline Keyboard Confirm
-   - Destructive: Double Confirm
-
-6. Built-in Plugins:
-   src/plugins/builtin/knowledge_base.py:
-   - search(query) → chunks with citations
-   - add(content, category) → neuer KB-Eintrag
-   - /kb add "Mein Geburtstag ist am 18. Juli"
-
-   src/plugins/builtin/reminders.py:
-   - set(text, datetime) → Redis-backed, APScheduler
-   - list() → alle aktiven Reminders
-   - cancel(id)
-   - Sendet Erinnerung via Telegram zur eingestellten Zeit
-
-   src/plugins/builtin/web_search.py:
-   - search(query) → Top-5 Ergebnisse (via SearXNG oder DuckDuckGo API)
-
-7. Tests: test_plugins.py
-   - Dynamic loading: mail intent → gmail plugin loaded
-   - Trimming: oversized result → trimmed to cap
-   - Firewall: injection blocked
-   - Reminders: set → fires at correct time (mock clock)
-   - KB: add entry → searchable
-
-`python -m pytest tests/test_plugins.py`
+TASK 6: Create configs/policies/budget.yaml:
+```yaml
+tiers:
+  tier_1:
+    models: [deepseek/deepseek-chat, google/gemini-2.0-flash-exp]
+    max_tokens: 400
+    cost_per_1k_tokens: 0.0001
+  tier_2:
+    models: [anthropic/claude-3-5-haiku-latest, openai/gpt-4.1-mini]
+    max_tokens: 800
+    cost_per_1k_tokens: 0.001
+  tier_3:
+    models: [anthropic/claude-sonnet-4-20250514, openai/gpt-4.1]
+    max_tokens: 1500
+    cost_per_1k_tokens: 0.005
+daily_cap_usd: 2.00
 ```
 
------
+TASK 7: Update configs/litellm_config.yaml to match budget.yaml model choices.
 
-## Session 4: Gmail + Calendar Integration
+TASK 8: Create stub directories with __init__.py:
+- src/orchestration/
+- src/integrations/ (gmail/, gcalendar/, n8n/, notion/, github_plugin/, terminal/,
+  home_assistant/, spotify/, todoist/, finance/, whatsapp_msg/, filesystem/)
+- src/subagents/
+- src/learning/
 
-**Ziel:** Echte Gmail und Google Calendar Anbindung.
+TASK 9: Update pyproject.toml – add dependencies:
+- mcp, openai-whisper OR faster-whisper, edge-tts, structlog
 
-```
-Lies CLAUDE.md. Baue Gmail + Calendar MCP-Server:
+TASK 10: Update README.md first line to:
+"# Nexus – Your Personal AI Agent. Self-hosted, open-source, no limits."
 
-1. src/integrations/gmail/server.py: Gmail MCP Server
-   - list_unread(max=10) → subjects, senders, preview
-   - search(query) → filtered results
-   - read(message_id) → full body
-   - send(to, subject, body) → requires confirmation
-   - summarize_inbox() → AI-powered inbox summary
+TASK 11: Run ALL existing tests. They must still pass.
+Fix any breakage caused by the migration (especially the dataclass → BaseModel change).
 
-2. src/integrations/gmail/auth.py: OAuth2 Flow
-   - /connect gmail → generates OAuth URL → user clicks → callback saves token
-   - Token refresh logic
-   - Tokens encrypted in Supabase
-
-3. src/integrations/gcalendar/server.py: Calendar MCP Server
-   - list_events(date_range) → upcoming events
-   - create_event(title, date, time, duration) → requires confirmation
-   - find_free_time(date_range) → available slots
-   - update_event(id, changes) → requires confirmation
-   - delete_event(id) → requires double confirmation
-
-4. src/integrations/gcalendar/auth.py: Shared OAuth2 (Google scopes)
-
-5. Tests: test_gmail.py + test_calendar.py (mit Mocks)
-   - "Check my mails" → list_unread aufgerufen, formatiert zurück
-   - "Send an email to X" → confirmation gate → send
-   - "What's on my calendar tomorrow?" → list_events
-   - "Book a meeting tomorrow at 3" → create_event + confirm
-   - OAuth flow: Token gespeichert + refreshed
-
-`python -m pytest tests/test_gmail.py tests/test_calendar.py`
+ACCEPTANCE: `python -m pytest tests/ -v` passes. New configs exist. No functionality lost.
 ```
 
------
+---
 
-## Session 5: n8n Integration (Game-Changer)
+## Session 1: Multi-Agent Orchestration + Real Agent Loop
 
-**Ziel:** n8n Workflows lesen, triggern und ERSTELLEN via Chat.
-
-```
-Lies CLAUDE.md. Baue den n8n MCP-Server:
-
-1. src/integrations/n8n/server.py: n8n MCP Server
-   - list_workflows() → name, active status, last run
-   - get_workflow(id) → full workflow details
-   - trigger_workflow(id, data?) → execute + return result
-   - create_workflow(spec) → creates new workflow via n8n API
-   - update_workflow(id, changes) → modify existing
-   - activate/deactivate_workflow(id)
-
-2. src/integrations/n8n/builder.py: Workflow Builder (AI-powered)
-   - User beschreibt in natürlicher Sprache was der Workflow tun soll
-   - Nexus generiert n8n-kompatibles Workflow-JSON
-   - Kennt n8n Node-Typen: Cron, Gmail, HTTP, AI, Telegram, Notion, etc.
-   - Generiert via Tier-2/3 LLM mit Structured Output
-   - Validiert JSON gegen n8n Schema bevor es gesendet wird
-
-3. src/integrations/n8n/templates.py: Workflow-Vorlagen
-   - "Daily inbox summary" → fertige Vorlage
-   - "Weekly report" → fertige Vorlage
-   - "Invoice monitor" → fertige Vorlage
-   - Templates können als Basis genommen und angepasst werden
-
-4. src/integrations/n8n/auth.py: API Key Auth
-   - /connect n8n → User gibt n8n URL + API Key ein
-   - Stored encrypted in Supabase
-
-5. Telegram UX für Workflow-Erstellung:
-   - User beschreibt Workflow
-   - Nexus zeigt Preview (Schritte als nummerierte Liste)
-   - Inline Keyboard: [✅ Erstellen] [✏️ Anpassen] [❌ Abbrechen]
-   - "Anpassen" → follow-up Fragen
-   - "Erstellen" → API call + Bestätigung
-
-6. Tests: test_n8n.py
-   - list_workflows → korrekt formatiert
-   - trigger_workflow → Ausführung + Ergebnis
-   - create_workflow: "Send me a Telegram message every day at 8am"
-     → valides n8n JSON mit Cron + Telegram Node
-   - create_workflow: "Monitor Gmail for invoices, save to Drive"
-     → valides JSON mit Gmail + Google Drive Nodes
-   - Confirmation gate für create/delete
-
-`python -m pytest tests/test_n8n.py`
-```
-
------
-
-## Session 6: Grounding + Observability
-
-**Ziel:** Mode-abhängige Faktenprüfung + Decision Logs.
+**Goal:** The brain of Nexus. Multi-agent system + first real LLM calls.
 
 ```
-Lies CLAUDE.md. Baue Grounding + Observability:
+Read CLAUDE.md §6 (Multi-Agent Orchestration) completely.
 
-GROUNDING:
-1. src/grounding/validator.py: Mode-Aware Validator
-   - STRICT: Full validation (Hard-Fact detection, citation check, repair)
-   - HYBRID: Validate if KB-hit exists, allow LLM-only answers (marked)
-   - OPEN: Skip validation (tool results are ground truth)
+TASK 1: src/orchestration/messages.py
+- Define inter-agent message types as Pydantic models:
+  TaskRequest, TaskResult, SecurityReview, BudgetQuery, BudgetResponse
+- Each has: task_id, from_agent, to_agent, payload, timestamp
 
-2. src/grounding/citations.py: Citation Engine (nur STRICT/HYBRID)
-3. src/grounding/entity_registry.py: Per-namespace (user KB, sub-agent KB)
-4. src/grounding/repair.py: 1-step repair (nur STRICT)
+TASK 2: src/orchestration/task_board.py
+- TaskBoard class (in-memory for now, Redis-ready interface)
+- Methods: create_task, update_status, get_task, list_tasks_for_request
+- Task statuses: pending, running, completed, failed, vetoed
 
-OBSERVABILITY:
-5. src/observability/langfuse.py: Decision Logs (20 Felder, siehe CLAUDE.md)
-6. src/observability/pii.py: Synthetic PII replacement
-7. src/observability/alerts.py: Telegram alerts bei Anomalien
+TASK 3: src/orchestration/guardian.py
+- GuardianAgent class
+- Method: review(tool_name, args, risk_level) → Approved | NeedsConfirmation | Blocked
+- Loads rules from configs/policies/guardian.yaml
+- Uses existing src/tools/firewall.py for injection detection
+- Adds policy checks on top (blocked commands, path sandboxing, domain checks)
+- Returns structured GuardianVerdict with reason
 
-Tests: test_grounding.py + test_observability.py
-- STRICT mode: fact without citation → FAIL
-- OPEN mode: same fact → PASS (no validation)
-- HYBRID mode: KB hit → validated, no KB hit → allowed but marked
-- Decision log: all fields populated
-- PII redaction works
+TASK 4: src/orchestration/budget.py
+- BudgetAgent class
+- Method: select_model(task_tier, task_description) → model_name, max_tokens
+- Method: track_usage(model, tokens_in, tokens_out, cost)
+- Method: get_daily_spend() → float
+- Method: check_budget() → BudgetStatus (ok | warning | exceeded)
+- Loads config from configs/policies/budget.yaml
+- In-memory tracking (Redis-ready interface)
 
-`python -m pytest tests/test_grounding.py tests/test_observability.py`
+TASK 5: src/orchestration/specialists.py
+- SpecialistAgent base class
+- Subclasses: ResearchAgent, CoderAgent, WriterAgent, OpsAgent
+- Each has: name, system_prompt_snippet, allowed_plugins
+- Method: execute(task: TaskRequest, context: ContextBundle) → TaskResult
+- Uses src/agent/loop.py for actual LLM calls
+
+TASK 6: src/orchestration/coordinator.py
+- Coordinator class: the entry point for all requests
+- Method: process(message: UnifiedMessage) → AgentResponse
+- Logic:
+  1. Route message → RoutingDecision (uses existing routing pipeline)
+  2. If simple (single intent, high confidence, no delegation needed):
+     → Run single ReAct loop directly (fast path, ~70% of requests)
+  3. If complex (should_delegate=True OR multiple tools):
+     → Manager decomposes → TaskGraph → dispatch to specialists
+  4. Budget Agent selects model for each task
+  5. Guardian Agent reviews each tool call
+  6. Assemble final response
+
+TASK 7: src/orchestration/manager.py
+- ManagerAgent class
+- Method: decompose(message, routing_decision) → list[TaskRequest]
+- Method: assemble(results: list[TaskResult]) → AgentResponse
+- Uses tier_2/tier_3 LLM for decomposition (via LiteLLM)
+- Simple requests: returns single task (self-handled)
+
+TASK 8: REFACTOR src/agent/loop.py
+- Make it actually call LiteLLM (not return hardcoded text)
+- Async ReAct loop:
+  1. Build system prompt (src/agent/prompt.py)
+  2. Call LiteLLM with tier from RoutingDecision
+  3. Parse response for tool calls
+  4. If tool call: Guardian review → execute tool → feed result back
+  5. Max loops: 5, timeout: 30s
+  6. Return structured AgentResponse
+- Handle LiteLLM errors gracefully (timeout, rate limit, budget exceeded)
+
+TASK 9: REFACTOR src/agent/prompt.py
+- build_system_prompt() for personal agent:
+  "You are Nexus, a personal AI agent. You act on behalf of your user.
+   You can read emails, manage calendars, create automations, search the web,
+   control servers, and much more. Available tools: {plugin_schemas}.
+   User facts: {personal_facts}. Language: {language}."
+- Inject active plugin schemas dynamically
+- Inject personal facts from memory
+- Grounding mode instructions based on RoutingDecision
+
+TASK 10: Wire it all together in src/main.py
+- Coordinator replaces direct AgentLoop usage
+- /chat/web endpoint uses Coordinator.process()
+
+TASK 11: Tests in tests/test_orchestration.py:
+- Guardian blocks "rm -rf /"
+- Guardian approves "ls /home/nexus/workspace"
+- Guardian requires confirmation for "apt install nginx"
+- Budget Agent selects tier_1 for simple query
+- Budget Agent blocks when daily cap exceeded
+- Coordinator routes simple "hello" directly (no delegation)
+- Coordinator delegates "check mails and create workflow" to specialists
+- Manager decomposes multi-step task into TaskGraph
+
+TASK 12: Update tests/test_agent.py for new loop (mock LiteLLM calls).
+
+ACCEPTANCE: `python -m pytest tests/ -v` passes. Agent makes real LLM calls
+(mocked in tests). Multi-agent orchestration works end-to-end.
 ```
 
------
+---
 
-## Session 7: Sub-Agent Factory
+## Session 2: Telegram Bot + Voice + Onboarding
 
-**Ziel:** Sub-Agents via Chat erstellen und verwalten.
+**Goal:** Nexus comes alive in Telegram. Voice support. Chat-based setup.
 
 ```
-Lies CLAUDE.md. Baue das Sub-Agent System:
+Read CLAUDE.md §12 (Channels & Voice) and §15 (Onboarding).
 
-1. src/subagents/manager.py: Sub-Agent CRUD
-   - create(name, channel, kb_content) → SubAgent
-   - Erstellt: KB namespace, system prompt, intent config, channel setup
-   - list() → alle Sub-Agents des Users
-   - delete(id) → cleanup
-   - /subagent {name} status/pause/resume/kb/logs Commands
+TASK 1: src/channels/telegram.py – FULL aiogram 3.x implementation
+- Bot startup in src/main.py (webhook or polling mode)
+- /start → onboarding flow
+- /help → feature overview
+- /connect {plugin} → plugin management
+- /subagents → sub-agent management
+- /costs → budget report (from Budget Agent)
+- /facts → personal facts CRUD
+- Text messages → UnifiedMessage → Coordinator.process() → reply
+- Inline keyboards for confirmation gates (Guardian Agent confirmations)
+- Error handling: graceful messages, not stack traces
 
-2. src/subagents/runtime.py: Sub-Agent Execution
-   - Isolierter Kontext (eigene KB, eigener Prompt, STRICT grounding)
-   - Shared LLM Gateway (LiteLLM) aber separates Cost-Tracking
-   - Kann NICHT auf persönliche Plugins zugreifen (Gmail, Calendar etc.)
-   - Nur: kb_search, human_escalation + konfigurierte Business-Tools
+TASK 2: src/channels/voice.py – Voice pipeline
+- receive_voice(audio_bytes) → text (Whisper STT)
+- synthesize_voice(text) → audio_bytes (Edge-TTS)
+- Integration with Telegram: voice message received → STT → process → TTS → voice reply
+- Fallback: if STT fails, ask user to type instead
+- Use faster-whisper (local, free) or OpenAI Whisper API (configurable)
 
-3. src/subagents/templates.py: Vorgefertigte Templates
-   - "customer_service": FAQ + Beschwerden + Weiterleitung
-   - "appointment_booking": Termine + Storno + Erinnerungen
-   - "lead_capture": Kontaktdaten sammeln + CRM-Eintrag
+TASK 3: src/onboarding/flow.py – REWRITE as Telegram interactive flow
+- Step 1: LLM provider selection (inline keyboard)
+- Step 2: Name input (text message)
+- Step 3: Language selection (inline keyboard)
+- Step 4: Save preferences to DB/config
+- Step 5: Welcome message with available commands and /connect hints
+- State machine pattern (track onboarding step per user in Redis/memory)
 
-4. src/subagents/models.py: SubAgent, SubAgentConfig
+TASK 4: src/channels/message.py – Update from_telegram_payload()
+- Handle voice messages (download audio, set voice_audio field)
+- Handle media (photos, documents)
+- Handle callback queries (inline keyboard responses)
 
-5. Telegram UX:
-   - "Create a bot for my nail school" → interaktiver Setup-Flow
-   - Nexus fragt: Name? Channel? Was soll er können? KB-Inhalt?
-   - Erstellt Sub-Agent + gibt Management-Commands
+TASK 5: Update src/main.py
+- Start aiogram bot alongside FastAPI
+- Route Telegram updates through Coordinator
 
-6. Tests: test_subagents.py
-   - Create sub-agent → isolierte KB erstellt
-   - Sub-agent antwortet nur aus eigener KB (STRICT)
-   - Sub-agent kann nicht auf Gmail zugreifen
-   - Sub-agent hat eigenes Cost-Tracking
-   - Delete → cleanup komplett
+TASK 6: Tests in tests/test_telegram.py (mock aiogram):
+- /start triggers onboarding
+- Text message gets agent response
+- Voice message gets STT → response → TTS
+- Inline keyboard confirmation works
+- /connect shows plugin list
 
-`python -m pytest tests/test_subagents.py`
+ACCEPTANCE: Bot responds in Telegram. Voice works. Onboarding flow completes.
 ```
 
------
+---
+
+## Session 3: Plugin System + Built-in Plugins
+
+**Goal:** MCP-based plugin system. Built-in plugins fully functional.
+
+```
+Read CLAUDE.md §8 (Plugin System).
+
+TASK 1: src/plugins/manager.py – Plugin Manager
+- discover() → list all plugins from configs/plugins/available.yaml
+- install(plugin_id) → enable plugin for user
+- uninstall(plugin_id) → disable
+- get_enabled() → list of active plugins
+- /connect {name} handler: check if plugin exists, guide auth if needed
+- /disconnect {name} handler
+
+TASK 2: src/plugins/registry.py – REFACTOR for MCP awareness
+- get_plugins_for_intent(intent) → only relevant plugin schemas
+- get_all_schemas() → for system prompt injection
+- Dynamic loading: only load schemas the current intent needs
+- Measure schema token cost (for Budget Agent)
+
+TASK 3: configs/plugins/available.yaml – All plugins with metadata:
+```yaml
+plugins:
+  knowledge_base:
+    type: builtin
+    description: "Personal knowledge base"
+    auth: none
+    always_loaded: true
+  reminders:
+    type: builtin
+    description: "Time-based reminders"
+    auth: none
+    always_loaded: true
+  web_search:
+    type: builtin
+    description: "Web search via SearXNG/DuckDuckGo"
+    auth: none
+    always_loaded: true
+  gmail:
+    type: first_party
+    description: "Read, search, send emails"
+    auth: oauth2
+    oauth_scopes: ["gmail.readonly", "gmail.send"]
+  gcalendar:
+    type: first_party
+    description: "Manage Google Calendar"
+    auth: oauth2
+  n8n:
+    type: first_party
+    description: "Manage n8n workflows"
+    auth: api_key
+  # ... all others from CLAUDE.md §8
+```
+
+TASK 4: src/plugins/builtin/knowledge_base.py – UPGRADE
+- search(query) → chunks with citations and scores
+- add(content, category) → new KB entry (extract facts automatically)
+- remove(entry_id)
+- list(category?) → all entries
+- Auto-fact extraction: when user says "remember that X", extract structured fact
+
+TASK 5: src/plugins/builtin/reminders.py – NEW
+- set(text, datetime, recurring?) → create reminder
+- list() → all active reminders
+- cancel(id)
+- APScheduler integration: fires at correct time
+- Sends reminder via Telegram message
+- Recurring reminders: daily, weekly, monthly
+
+TASK 6: src/plugins/builtin/web_search.py – NEW
+- search(query, max_results=5) → results with title, snippet, URL
+- Use DuckDuckGo Instant Answer API (free, no key needed)
+- OR SearXNG instance (self-hosted, configurable)
+- Anonymous: no tracking, no API key needed
+
+TASK 7: Tests in tests/test_plugins.py:
+- Plugin manager discovers all plugins
+- Install/uninstall works
+- KB: add entry → search returns it with citation
+- Reminders: set → fires at correct time (mock clock)
+- Web search: returns results (mock HTTP)
+- Dynamic loading: mail intent loads gmail schema only
+- Guardian integration: plugin calls go through Guardian review
+
+ACCEPTANCE: Plugin system works. Built-in plugins functional. /connect flow works in Telegram.
+```
+
+---
+
+## Session 4: Gmail + Calendar + n8n Integration
+
+**Goal:** The three core first-party plugins. n8n workflow CREATION is the killer feature.
+
+```
+Read CLAUDE.md §8 (Plugin System, especially n8n section).
+
+TASK 1: src/integrations/gmail/server.py
+- list_unread(max=10) → subjects, senders, preview
+- search(query) → filtered results
+- read(message_id) → full message body
+- send(to, subject, body) → REQUIRES Guardian confirmation
+- summarize_inbox() → AI-powered summary (uses agent LLM)
+- All via Google Gmail API (google-auth, google-api-python-client)
+
+TASK 2: src/integrations/gmail/auth.py
+- OAuth2 flow triggered by /connect gmail
+- Generates OAuth URL → user clicks → callback saves token
+- Token refresh logic
+- Tokens stored encrypted (Supabase or local file in dev mode)
+
+TASK 3: src/integrations/gcalendar/server.py
+- list_events(date_range) → upcoming events
+- create_event(title, date, time, duration) → requires confirmation
+- update_event(id, changes) → requires confirmation
+- delete_event(id) → requires DOUBLE confirmation (critical risk)
+- find_free_time(date_range) → available slots
+
+TASK 4: src/integrations/gcalendar/auth.py
+- Shared Google OAuth2 with Gmail (same credentials, additional scope)
+
+TASK 5: src/integrations/n8n/server.py
+- list_workflows() → name, active status, last run time
+- get_workflow(id) → full workflow details
+- trigger_workflow(id, data?) → execute and return result
+- create_workflow(spec) → creates via n8n REST API
+- update_workflow(id, changes) → modify existing
+- activate_workflow(id) / deactivate_workflow(id)
+- All via n8n REST API (https://docs.n8n.io/api/api-reference/)
+
+TASK 6: src/integrations/n8n/builder.py – THE KILLER FEATURE
+- User describes workflow in natural language
+- Nexus generates n8n-compatible workflow JSON
+- MUST know n8n node types: Cron/Schedule, Gmail, HTTP Request, Code,
+  Telegram, Notion, Google Drive, Webhook, IF, Switch, Merge
+- Generation via tier_2/tier_3 LLM with structured output
+- Validates generated JSON against n8n schema before sending
+- Preview flow: show numbered steps → inline keyboard [✅ Create] [✏️ Modify] [❌ Cancel]
+- "Modify" → follow-up conversation → regenerate
+
+TASK 7: src/integrations/n8n/auth.py
+- /connect n8n → asks for n8n URL + API key via Telegram
+- Validates connection (calls n8n API to test)
+- Stores encrypted
+
+TASK 8: Tests:
+- tests/test_gmail.py: list_unread, search, send (mocked Google API)
+- tests/test_calendar.py: list_events, create, find_free_time (mocked)
+- tests/test_n8n.py:
+  - list_workflows returns formatted list
+  - trigger_workflow executes and returns result
+  - builder: "Send Telegram message every day at 8am"
+    → generates valid n8n JSON with Schedule + Telegram nodes
+  - builder: "Monitor Gmail for invoices, save to Drive"
+    → generates valid JSON with Gmail + Google Drive nodes
+  - Guardian confirms create/delete, blocks without confirmation
+- OAuth flow: token saved and refreshed (mocked)
+
+ACCEPTANCE: Gmail, Calendar, n8n all work end-to-end (with mocks).
+n8n workflow CREATION generates valid JSON. Telegram UX for all three works.
+```
+
+---
+
+## Session 5: Grounding Refactor + Memory Upgrade + Personal Facts
+
+**Goal:** Mode-aware grounding. Personal facts auto-extraction. Memory upgrade.
+
+```
+Read CLAUDE.md §7 (Grounding) and §10 (Memory).
+
+TASK 1: REFACTOR src/grounding/validator.py
+- Accept grounding_mode parameter (from RoutingDecision)
+- STRICT mode: existing behavior (citation required, repair-or-fallback)
+- HYBRID mode: if KB hit exists → validate + cite. If no KB hit → allow, mark "[unverified]"
+- OPEN mode: skip validation entirely, return passed=True always
+- The Guardian Agent should call this AFTER tool execution for response validation
+
+TASK 2: src/memory/personal.py – NEW
+- PersonalFactsStore class
+- Auto-extract facts from conversations:
+  "My name is Jerome" → store: {fact: "User's name is Jerome", source: "conversation"}
+  "My n8n is on localhost:5678" → store: {fact: "n8n URL: localhost:5678"}
+- Extraction via tier_1 LLM (cheap, runs after each conversation)
+- CRUD: /facts list, /facts add "...", /facts remove {id}
+- Inject top relevant facts into system prompt (max ~100 tokens)
+- Storage: Supabase in production, in-memory dict in local mode
+
+TASK 3: UPGRADE src/memory/semantic.py
+- Replace lexical overlap with actual sentence-transformers embeddings
+  (paraphrase-multilingual-MiniLM-L12-v2)
+- Use numpy cosine similarity (no pgvector yet, that's production adapter)
+- Keep the same interface: upsert(id, text), search(query, top_k)
+
+TASK 4: Update src/memory/context.py
+- Add personal_facts to ContextPackage
+- Budget: working_turns (~400 tok) + summary (~200) + semantic (~300) + facts (~100) = ~1,000
+- Hard cap at 1,200 tokens (use tiktoken to count)
+
+TASK 5: Update src/routing/__init__.py
+- Set grounding_mode automatically based on intent (see CLAUDE.md §7 table)
+- Set should_delegate based on confidence + intent complexity
+
+TASK 6: Tests:
+- test_grounding.py: add OPEN mode test (always passes), HYBRID test (KB hit vs no hit)
+- test_memory.py: personal facts extraction, injection into context, token budget
+- test_routing.py: grounding_mode correctly set per intent
+
+ACCEPTANCE: Grounding modes work. Personal facts extracted and injected.
+Semantic search uses real embeddings. Token budget enforced.
+```
+
+---
+
+## Session 6: Sub-Agent Factory
+
+**Goal:** Create any sub-agent via chat. No templates.
+
+```
+Read CLAUDE.md §10 (Sub-Agent System).
+
+TASK 1: src/subagents/models.py
+- SubAgent (Pydantic BaseModel): id, name, owner_id, grounding_mode="strict",
+  channels, kb_namespace, system_prompt, intents, plugins_enabled, active, cost_tracking
+
+TASK 2: src/subagents/configurator.py – Interactive self-configuration
+- StateMachine for sub-agent creation via Telegram:
+  1. Ask: business name?
+  2. Ask: what should the bot handle? (free text → Nexus extracts intents)
+  3. Ask: which channels? (inline keyboard)
+  4. Ask: share knowledge (text/file/link → build KB)
+  5. Ask: should bot use n8n? (if yes, connect workflows)
+  6. Generate: system_prompt, intents config, KB entries
+  7. Confirm with user → create sub-agent
+- Generation uses tier_2 LLM (structured output for intents + prompt)
+
+TASK 3: src/subagents/manager.py – CRUD
+- create(config: SubAgentConfig) → SubAgent
+- Creates: KB namespace, system prompt, intent config
+- list() → all user's sub-agents
+- get(id) → sub-agent details + stats
+- delete(id) → cleanup all resources
+- pause(id) / resume(id)
+- Telegram commands: /subagents, /subagent {name} status/pause/resume/kb/logs
+
+TASK 4: src/subagents/runtime.py – Isolated execution
+- Process message for sub-agent (own KB, own prompt, STRICT grounding)
+- Shared LLM gateway (LiteLLM) but separate cost tracking
+- CANNOT access personal plugins (gmail, calendar, etc.)
+- CAN access: kb_search, human_escalation, n8n (if configured)
+- Route incoming channel messages to correct sub-agent by channel config
+
+TASK 5: Tests in tests/test_subagents.py:
+- Create sub-agent via configurator → KB created, prompt generated
+- Sub-agent answers from own KB only (STRICT grounding)
+- Sub-agent cannot access gmail plugin → blocked
+- Sub-agent has separate cost tracking
+- Delete → complete cleanup
+- Multiple sub-agents: isolated from each other
+
+ACCEPTANCE: Sub-agents created interactively. Isolated execution works.
+STRICT grounding enforced. Cost tracking separate.
+```
+
+---
+
+## Session 7: Learning & Evolution + Observability Upgrade
+
+**Goal:** Nexus gets smarter over time. Full observability.
+
+```
+Read CLAUDE.md §11 (Learning & Evolution).
+
+TASK 1: src/learning/tracker.py
+- PerformanceTracker class
+- Log per task: success, user_corrections, iterations, cost, latency,
+  model_used, intent_predicted, intent_actual, tools_used
+- Success heuristic: no user correction within 2 messages = success
+- Storage: append-only log (JSON lines file in local, Supabase in prod)
+
+TASK 2: src/learning/analyzer.py
+- Analyze performance logs (batch, runs periodically)
+- Identify patterns:
+  - Intents frequently misrouted
+  - Tools that often fail
+  - Models that are over/under-used
+  - Average cost per intent type
+- Output: AnalysisReport with recommendations
+
+TASK 3: src/learning/tuner.py
+- Based on AnalysisReport, generate updated configs:
+  - Adjust routing confidence thresholds
+  - Update intent keyword lists
+  - Adjust default tiers for intents
+  - Update prompt snippets
+- Auto-apply non-breaking changes (keyword additions, threshold tweaks)
+- Require user approval for major changes (prompt rewrites, tier changes)
+- Store tuning history for rollback
+
+TASK 4: src/learning/competition.py (optional, lower priority)
+- For ambiguous requests: multiple specialists propose answers
+- Evaluator picks best one based on: confidence, cost, relevance
+- Winning agent's approach gets boosted in future routing
+
+TASK 5: UPGRADE src/observability/langfuse.py
+- Add new decision log fields from CLAUDE.md §14:
+  delegated_to_specialists, guardian_vetoes, budget_overrides, learning_score
+- Ensure all Coordinator decisions are logged
+
+TASK 6: Wire learning into Coordinator:
+- After each response: PerformanceTracker.log()
+- Periodic job (proactive scheduler): Analyzer.run() → Tuner.apply()
+
+TASK 7: Tests in tests/test_learning.py:
+- Tracker logs success/failure correctly
+- Analyzer identifies misrouted intents
+- Tuner generates valid config updates
+- Tuning history stored for rollback
+
+ACCEPTANCE: Performance tracking works. Analysis identifies patterns.
+Auto-tuning adjusts configs. Decision logs have all fields.
+```
+
+---
 
 ## Session 8: Golden Questions + Eval + Polish
 
-**Ziel:** End-to-End Tests, CI/CD, Dokumentation.
+**Goal:** End-to-end testing. Production readiness. Documentation.
 
 ```
-Lies CLAUDE.md. Baue Eval-Framework + finaler Polish:
+Read CLAUDE.md completely for final verification.
 
-1. tests/golden_questions/questions.yaml: 40 Test Cases
-   Personal Agent (25):
-   - Mail: "Check my emails", "Send email to X", "Summarize inbox"
-   - Calendar: "What's on tomorrow?", "Book meeting at 3"
-   - Reminders: "Remind me at 9", "List my reminders", "Cancel reminder"
-   - n8n: "List my workflows", "Run weekly report", "Create a workflow that..."
-   - KB: "Remember that X", "What do you know about Y"
-   - General: "Hello", "Help", "What can you do?"
-   - Edge: prompt injection, gibberish, 10+ turns, mixed language
+TASK 1: Update tests/golden_questions/questions.yaml – 50 test cases:
 
-   Sub-Agent (15):
-   - FAQ from KB only, no hallucination
-   - Unknown question → honest "I don't know"
-   - Attempted access to personal plugins → blocked
-   - Citation present for all hard facts
+Personal Agent (35):
+- Mail: "Check my emails", "Send email to X about Y", "Summarize inbox"
+- Calendar: "What's on tomorrow?", "Book meeting at 3", "Find free time this week"
+- Reminders: "Remind me at 9", "List reminders", "Cancel reminder X"
+- n8n: "List workflows", "Run weekly report", "Create a workflow that sends me
+  a daily summary of unread mails via Telegram"
+- KB: "Remember that my birthday is July 18", "What do you know about me?"
+- Web: "Search for latest AI news", "What is quantum computing?"
+- General: "Hello", "Help", "What can you do?", "How much did I spend today?"
+- Voice: (test STT/TTS pipeline with mock audio)
+- Multi-agent: "Check mails AND create a workflow" (tests delegation)
+- Server: "Run ls on my server" (tests Guardian confirmation)
+- Edge cases: prompt injection attempt, gibberish, very long message,
+  mixed DE/EN, 10+ turn conversation, budget exceeded scenario
 
-2. tests/golden_questions/runner.py: Eval Runner
-3. scripts/run_evals.py: CLI (--suite smoke/full)
-4. scripts/calibrate.py: Weekly confidence calibration
-5. .github/workflows/eval.yml: CI (smoke on push, full on release)
+Sub-Agent (15):
+- FAQ from KB only, no hallucination
+- Unknown question → "I don't know, let me forward to a human"
+- Attempted access to personal plugins → blocked
+- Citation present for all hard facts
+- Sub-agent with n8n: triggers booking workflow
+- Sub-agent isolation: can't see other sub-agent's KB
 
-6. Polish:
-   - README.md finalisieren (Screenshots, GIFs wenn möglich)
-   - /help Command mit allen verfügbaren Features
-   - Error handling: graceful failures mit hilfreichen Meldungen
-   - Rate limiting: max 30 messages/minute
+TASK 2: Update tests/golden_questions/runner.py
+- Run against live Coordinator (not just keyword routing)
+- Measure: intent accuracy, grounding pass rate, cost, latency
+- Generate report with pass/fail per test + aggregated metrics
 
-`python -m pytest tests/ -v`
+TASK 3: Update scripts/run_evals.py for new test structure
+TASK 4: Update .github/workflows/eval.yml (smoke on push, full on release)
+
+TASK 5: README.md – Complete rewrite:
+- Hero section: "Nexus – Your Personal AI Agent"
+- 30-second pitch (what it does, why it's better)
+- Quick Start (docker compose up + /start in Telegram)
+- Feature overview with examples
+- Plugin connection guide
+- Sub-agent creation guide
+- Architecture overview (simplified diagram)
+- Contributing guide
+- License (MIT)
+
+TASK 6: Polish:
+- /help command shows all features with examples
+- Error handling: every exception → graceful user-facing message
+- Rate limiting: max 30 messages/minute per user
+- Startup validation: check all required configs exist
+- Health endpoint: /health shows connected plugins + budget status
+
+ACCEPTANCE: All 50 golden questions pass. README is complete.
+Bot handles errors gracefully. Rate limiting works.
 ```
 
------
+---
 
-## Session 9+ (Later)
+## Session 9+: Future Extensions
 
-|Session|Modul                                      |Wann                   |
-|-------|-------------------------------------------|-----------------------|
-|9      |WhatsApp Channel (Baileys)                 |Wenn Telegram stabil   |
-|10     |Web Chat (FastAPI WebSocket + React Widget)|Für Sub-Agent Embedding|
-|11     |Notion Integration                         |Bei Bedarf             |
-|12     |Filesystem Plugin (lokale Dateien)         |Bei Bedarf             |
-|13     |Community Plugin SDK                       |Wenn Core stable       |
-|14     |Admin Dashboard (Web)                      |Bei mehreren Sub-Agents|
+| Session | Feature | When |
+|---------|---------|------|
+| 9 | Notion integration | After core stable |
+| 10 | GitHub integration | After core stable |
+| 11 | Terminal/SSH plugin | After Guardian hardened |
+| 12 | Home Assistant plugin | On demand |
+| 13 | Spotify plugin | On demand |
+| 14 | Todoist plugin | On demand |
+| 15 | Finance plugin (read-only) | When secure |
+| 16 | WhatsApp channel (Baileys) | When Telegram stable |
+| 17 | Discord channel | On demand |
+| 18 | Web Chat (React widget) | For sub-agent embedding |
+| 19 | WhatsApp message plugin | When Baileys stable |
+| 20 | Community plugin SDK | When plugin system proven |
+| 21 | Admin Dashboard (web) | When multiple sub-agents |
+| 22 | Multi-user support | When single-user stable |
 
------
+---
 
-## Regeln für alle Sessions
+## Rules for ALL Sessions (Codex MUST follow)
 
-1. **CLAUDE.md zuerst lesen** – immer
-1. **Personal-first** – Core Use Case ist der persönliche Agent, nicht Business-Bots
-1. **Plugins, nicht hardcoded** – Jede Integration ist ein MCP-Server
-1. **Grounding-Mode beachten** – OPEN für Personal, STRICT für Sub-Agents
-1. **Telegram ist primary channel** – alles muss in Telegram gut funktionieren
-1. **Git Commit nach jedem Modul**
-1. **Mocks für Tests** – kein echtes Gmail/Calendar/n8n in Unit-Tests
-1. **n8n ist First-Class** – nicht als Afterthought, sondern als Kernfeature
+1. **Read CLAUDE.md first** – always, completely
+2. **Extend, don't rewrite** – existing working code stays unless explicitly marked [REFACTOR]
+3. **All existing tests must keep passing** after every session
+4. **Pydantic BaseModel** for all data structures (never dataclasses for new code)
+5. **No LangChain, no LangGraph, no CrewAI** – custom code only
+6. **Mock external services in tests** – no real Gmail/Calendar/n8n API calls in tests
+7. **Guardian Agent reviews every tool call** – no exceptions
+8. **Budget Agent tracks every LLM call** – no exceptions
+9. **Git commit after each completed TASK** within a session
+10. **Telegram is primary channel** – everything must work there first
+11. **Error messages to users must be helpful**, not stack traces
+12. **Comments in English**, user-facing text follows configured language
+13. **n8n is first-class** – not an afterthought, as important as Gmail
