@@ -1,0 +1,111 @@
+intents:
+  mail:
+    keywords: [mail, email, inbox, send, nachricht, postfach]
+    examples: ["check my mails", "send email to X", "summarize inbox"]
+    default_tier: tier_1
+    risk_level: low
+    grounding_mode: open
+    plugins: [gmail]
+
+  calendar:
+    keywords: [calendar, termin, meeting, schedule, kalender, event]
+    examples: ["what's on tomorrow", "book meeting at 3", "find free time"]
+    default_tier: tier_1
+    risk_level: medium
+    grounding_mode: open
+    plugins: [gcalendar]
+
+  reminder:
+    keywords: [remind, erinner, todo, aufgabe, reminder]
+    examples: ["remind me at 9", "list reminders", "cancel reminder"]
+    default_tier: tier_1
+    risk_level: low
+    grounding_mode: open
+    plugins: [reminders, todoist]
+
+  automation:
+    keywords: [workflow, automation, n8n, automate, automatisier]
+    examples: ["create workflow", "list workflows", "run weekly report"]
+    default_tier: tier_2
+    risk_level: medium
+    grounding_mode: open
+    plugins: [n8n]
+
+  knowledge:
+    keywords: [remember, merke, wissen, know, fact, speicher]
+    examples: ["remember that X", "what do you know about Y"]
+    default_tier: tier_1
+    risk_level: low
+    grounding_mode: hybrid
+    plugins: [knowledge_base]
+
+  subagent:
+    keywords: [create bot, erstelle bot, sub-agent, chatbot]
+    examples: ["create a bot for my business", "manage my bots"]
+    default_tier: tier_2
+    risk_level: medium
+    grounding_mode: open
+    plugins: []
+
+  web_search:
+    keywords: [search, suche, google, look up, find, news]
+    examples: ["search for X", "what is Y", "latest news about Z"]
+    default_tier: tier_1
+    risk_level: low
+    grounding_mode: open
+    plugins: [web_search]
+
+  server:
+    keywords: [terminal, server, ssh, install, command, shell, deploy]
+    examples: ["run command X", "install Y on server", "check server status"]
+    default_tier: tier_2
+    risk_level: critical
+    grounding_mode: open
+    plugins: [terminal]
+
+  smart_home:
+    keywords: [light, licht, heizung, heating, temperature, home]
+    examples: ["turn on lights", "set temperature to 21", "home status"]
+    default_tier: tier_1
+    risk_level: medium
+    grounding_mode: open
+    plugins: [home_assistant]
+
+  music:
+    keywords: [play, musik, song, spotify, playlist, pause]
+    examples: ["play something chill", "what's playing", "next song"]
+    default_tier: tier_1
+    risk_level: low
+    grounding_mode: open
+    plugins: [spotify]
+
+  finance:
+    keywords: [balance, kontostand, ausgaben, expenses, money, budget]
+    examples: ["what's my balance", "expenses this month"]
+    default_tier: tier_1
+    risk_level: high
+    grounding_mode: open
+    plugins: [finance]
+
+  code:
+    keywords: [code, programming, debug, git, repo, commit, push]
+    examples: ["create issue on repo X", "push code", "debug this"]
+    default_tier: tier_2
+    risk_level: medium
+    grounding_mode: open
+    plugins: [github, terminal]
+
+  general:
+    keywords: [hello, hallo, hi, danke, thanks, help, hilfe]
+    examples: ["hello", "what can you do", "help"]
+    default_tier: tier_1
+    risk_level: low
+    grounding_mode: open
+    plugins: []
+
+  unknown:
+    keywords: []
+    default_tier: tier_2
+    risk_level: low
+    grounding_mode: open
+    plugins: [web_search]

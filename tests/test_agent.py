@@ -17,7 +17,7 @@ def test_build_system_prompt_contains_tenant_and_style() -> None:
 
     assert "Beauty & Nailschool Bochum" in prompt
     assert "professionell" in prompt
-    assert "Sprache 'de'" in prompt
+    assert "Language: de" in prompt
 
 
 def test_agent_response_to_dict() -> None:
@@ -25,3 +25,17 @@ def test_agent_response_to_dict() -> None:
     as_dict = response.to_dict()
     assert as_dict["intent"] == "faq"
     assert as_dict["confidence"] == 0.9
+
+
+
+def test_agent_loop_uses_litellm_call(monkeypatch):
+    from src.agent.loop import AgentLoop
+
+    loop = AgentLoop()
+
+    def fake_call(model: str, prompt: str, max_tokens: int) -> str:
+        return f"mocked:{model}:{max_tokens}"
+
+    monkeypatch.setattr(loop, "_call_litellm", fake_call)
+    out = loop.process({"intent": "general", "tier": "tier_1", "text": "hi"})
+    assert out["text"].startswith("mocked:tier_1")

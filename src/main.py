@@ -4,15 +4,15 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 
-from src.agent.loop import AgentLoop
 from src.channels.web import WebChannel
 from src.config import settings
 from src.db.client import create_event_store
 from src.db.models import ConversationEvent
+from src.orchestration.coordinator import Coordinator
 
 app = FastAPI(title="Nexus Agent", version="0.1.0")
 
-_agent_loop = AgentLoop()
+_coordinator = Coordinator()
 _web_channel = WebChannel()
 _db = create_event_store(settings)
 
@@ -36,20 +36,12 @@ async def web_chat(payload: dict) -> dict:
         )
     )
 
-    result = _agent_loop.process(
-        {
-            "request_id": str(uuid4()),
-            "tenant_id": message.tenant_id,
-            "sender_id": message.sender_id,
-            "channel": message.channel,
-            "text": message.text,
-        }
-    )
+    result = _coordinator.process(message)
 
     return {
         "tenant_id": message.tenant_id,
-        "response": _web_channel.format_response(result["text"], tenant_name=message.tenant_id),
-        "intent": result["intent"],
+        "response": _web_channel.format_response(result.text, tenant_name=message.tenant_id),
+        "intent": result.intent,
     }
 
 
