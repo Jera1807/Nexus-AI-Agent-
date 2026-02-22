@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
 from typing import Any
 
+from pydantic import BaseModel, Field
 
-@dataclass
-class AgentResponse:
+
+class AgentResponse(BaseModel):
     text: str
     intent: str
-    confidence: float
-    citations: list[str]
+    confidence: float = Field(ge=0.0, le=1.0)
+    citations: list[str] = Field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return self.model_dump()

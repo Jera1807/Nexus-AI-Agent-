@@ -1,0 +1,15 @@
+rules:
+  shell_commands:
+    blocked: [rm -rf, mkfs, dd, shutdown, reboot]
+    require_confirmation: [apt install, pip install, docker, systemctl]
+  http_requests:
+    blocked_domains: []
+    require_confirmation_for_new_domains: true
+  file_operations:
+    sandboxed_paths: [/home/nexus/workspace]
+    blocked_paths: [/etc, /usr, /var, /root]
+  risk_levels:
+    low: auto_approve
+    medium: log_and_approve
+    high: require_user_confirmation
+    critical: block_and_alert

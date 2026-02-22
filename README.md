@@ -1,4 +1,4 @@
-# Project Nexus
+# Nexus – Your Personal AI Agent. Self-hosted, open-source, no limits.
 
 Multi-tenant AI-Agent Framework für den produktiven Einsatz bei KMU.
 

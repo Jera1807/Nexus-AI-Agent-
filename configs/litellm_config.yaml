@@ -1,21 +1,21 @@
 model_list:
   - model_name: tier_1
     litellm_params:
-      model: openai/gpt-4o-mini
+      model: deepseek/deepseek-chat
       api_key: os.environ/LITELLM_API_KEY
-      max_tokens: 350
+      max_tokens: 400
       timeout: 10
   - model_name: tier_2
     litellm_params:
-      model: openai/gpt-4.1-mini
+      model: anthropic/claude-3-5-haiku-latest
       api_key: os.environ/LITELLM_API_KEY
       max_tokens: 800
       timeout: 20
   - model_name: tier_3
     litellm_params:
-      model: openai/gpt-4.1
+      model: anthropic/claude-sonnet-4-20250514
       api_key: os.environ/LITELLM_API_KEY
-      max_tokens: 1200
+      max_tokens: 1500
       timeout: 30
 
 router_settings:
