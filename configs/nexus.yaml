@@ -1,0 +1,18 @@
+agent:
+  name: "Nexus"
+  default_language: "both"
+  grounding_mode_default: "open"
+  max_react_loops: 5
+  react_timeout_seconds: 30
+
+budget:
+  daily_cap_usd: 2.00
+  alert_threshold_pct: 80
+
+multi_agent:
+  enabled: true
+  delegation_threshold: 0.6
+  max_specialists: 3
+
+plugins:
+  builtin: [knowledge_base, reminders, web_search, human_escalation]

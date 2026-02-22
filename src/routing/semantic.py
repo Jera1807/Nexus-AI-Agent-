@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from src.routing.confidence import clamp_confidence
-from src.routing.models import RiskLevel, RoutingDecision, Tier
+from src.routing.models import GroundingMode, RiskLevel, RoutingDecision, Tier
 
 TOKEN_PATTERN = re.compile(r"\w+", flags=re.UNICODE)
 
@@ -53,4 +53,7 @@ def semantic_route(message: str, intents_config: dict[str, Any]) -> RoutingDecis
         risk_level=RiskLevel(meta.get("risk_level", RiskLevel.MEDIUM.value)),
         confidence=clamp_confidence(0.35 + best_overlap),
         rationale=f"semantic overlap match for intent '{best_intent}'",
+        grounding_mode=GroundingMode(meta.get("grounding_mode", GroundingMode.OPEN.value)),
+        plugins_to_load=list(meta.get("plugins", [])),
+        should_delegate=Tier(meta.get("default_tier", Tier.TIER_2.value)) == Tier.TIER_3,
     )

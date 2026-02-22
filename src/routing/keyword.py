@@ -4,7 +4,7 @@ import re
 from functools import lru_cache
 from typing import Any
 
-from src.routing.models import RiskLevel, RoutingDecision, Tier
+from src.routing.models import GroundingMode, RiskLevel, RoutingDecision, Tier
 
 WORD_BOUNDARY_TEMPLATE = r"(?<!\w){token}(?!\w)"
 
@@ -56,4 +56,7 @@ def keyword_route(message: str, intents_config: dict[str, Any]) -> RoutingDecisi
         risk_level=risk_level,
         confidence=round(min(0.95, 0.4 + best_score), 3),
         rationale=rationale,
+        grounding_mode=GroundingMode(meta.get("grounding_mode", GroundingMode.OPEN.value)),
+        plugins_to_load=list(meta.get("plugins", [])),
+        should_delegate=tier == Tier.TIER_3,
     )
