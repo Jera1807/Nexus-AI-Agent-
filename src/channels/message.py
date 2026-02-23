@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 from datetime import datetime, timezone
 from typing import Any
 
@@ -36,8 +37,8 @@ def from_telegram_payload(payload: dict[str, Any], tenant_id: str) -> UnifiedMes
     voice = payload.get("voice")
     if isinstance(voice, dict) and isinstance(voice.get("audio_base64"), str):
         try:
-            voice_audio = base64.b64decode(voice["audio_base64"])
-        except Exception:
+            voice_audio = base64.b64decode(voice["audio_base64"], validate=True)
+        except (binascii.Error, ValueError):
             voice_audio = None
 
     callback_data = None
