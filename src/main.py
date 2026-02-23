@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -12,8 +12,6 @@ from src.config import settings
 from src.db.client import create_event_store
 from src.db.models import ConversationEvent
 from src.orchestration.coordinator import Coordinator
-
-app = FastAPI(title="Nexus Agent", version="0.1.0")
 
 _coordinator = Coordinator()
 _web_channel = WebChannel()
@@ -27,19 +25,22 @@ async def _telegram_polling_stub() -> None:
         await asyncio.sleep(60)
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     global _telegram_task
     if settings.telegram_bot_token:
         _telegram_task = asyncio.create_task(_telegram_polling_stub())
 
+    try:
+        yield
+    finally:
+        if _telegram_task is not None:
+            _telegram_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await _telegram_task
 
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    if _telegram_task is not None:
-        _telegram_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await _telegram_task
+
+app = FastAPI(title="Nexus Agent", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/health")
