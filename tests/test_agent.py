@@ -37,5 +37,5 @@ def test_agent_loop_uses_litellm_call(monkeypatch):
         return f"mocked:{model}:{max_tokens}"
 
     monkeypatch.setattr(loop, "_call_litellm", fake_call)
-    out = loop.process({"intent": "general", "tier": "tier_1", "text": "hi"})
-    assert out["text"].startswith("mocked:tier_1")
+    out = loop.process({"intent": "general", "tier": "tier_1", "text": "hi", "max_tokens": 777})
+    assert out["text"].startswith("mocked:tier_1:777")

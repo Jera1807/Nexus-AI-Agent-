@@ -62,3 +62,20 @@ def test_manager_decomposes_multi_step_task() -> None:
     )
     tasks = manager.decompose("check mails and create workflow", decision, request_id="r1")
     assert len(tasks) == 2
+
+
+def test_guardian_critical_from_policy_blocks() -> None:
+    guardian = GuardianAgent()
+    verdict = guardian.review("terminal", {"command": "echo ok"}, "critical")
+    assert verdict.outcome == GuardianOutcome.BLOCKED
+
+
+def test_budget_and_guardian_fallback_when_policy_file_missing(tmp_path) -> None:
+    missing = tmp_path / "missing.yaml"
+    budget = BudgetAgent(policy_path=missing)
+    selection = budget.select_model("tier_2", "test")
+    assert selection.max_tokens == 800
+
+    guardian = GuardianAgent(policy_path=missing)
+    verdict = guardian.review("terminal", {"command": "echo ok"}, "low")
+    assert verdict.outcome == GuardianOutcome.APPROVED

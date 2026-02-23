@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     runtime_mode: str = "local"
 
     telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
     n8n_url: str = ""
     n8n_api_key: str = ""
     whisper_model: str = "base"

@@ -28,14 +28,15 @@ class AgentLoop:
             response.raise_for_status()
             data = response.json()
             return str(data["choices"][0]["message"]["content"])
-        except Exception:
+        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError):
             return "Alles klar, ich kümmere mich darum."
 
     def process(self, event: dict[str, Any]) -> dict[str, Any]:
         start = time.perf_counter()
         model = str(event.get("tier", "tier_2"))
         prompt = str(event.get("text", ""))
-        text = self._call_litellm(model=model, prompt=prompt, max_tokens=400)
+        max_tokens = int(event.get("max_tokens", 400))
+        text = self._call_litellm(model=model, prompt=prompt, max_tokens=max_tokens)
 
         response = {
             "text": text,

@@ -4,7 +4,7 @@ from src.agent.loop import AgentLoop
 from src.agent.structured import AgentResponse
 from src.channels.message import UnifiedMessage
 from src.orchestration.budget import BudgetAgent
-from src.orchestration.guardian import GuardianAgent
+from src.orchestration.guardian import GuardianAgent, GuardianOutcome
 from src.orchestration.manager import ManagerAgent
 from src.orchestration.specialists import CoderAgent, ContextBundle, OpsAgent, ResearchAgent, WriterAgent
 from src.routing.models import RiskLevel, RoutingDecision, Tier
@@ -41,6 +41,17 @@ class Coordinator:
     def process(self, message: UnifiedMessage) -> AgentResponse:
         decision = self._simple_route(message.text)
 
+        # Apply security/budget checks even on fast path.
+        guardian_verdict = self.guardian.review(
+            tool_name="agent_response",
+            args={"query": message.text},
+            risk_level=decision.risk_level.value,
+        )
+        if guardian_verdict.outcome == GuardianOutcome.BLOCKED:
+            return AgentResponse(text="Anfrage wurde aus Sicherheitsgründen blockiert.", intent=decision.intent, confidence=0.9, citations=[])
+
+        selection = self.budget.select_model(decision.tier.value, message.text)
+
         if not decision.should_delegate:
             result = self.loop.process(
                 {
@@ -50,7 +61,8 @@ class Coordinator:
                     "channel": message.channel,
                     "text": message.text,
                     "intent": decision.intent,
-                    "tier": decision.tier.value,
+                    "tier": selection.model_name,
+                    "max_tokens": selection.max_tokens,
                 }
             )
             return AgentResponse(text=result["text"], intent=result["intent"], confidence=0.8, citations=[])

@@ -33,3 +33,21 @@ def test_web_chat_and_events_flow() -> None:
     items = events_response.json()["items"]
     assert len(items) >= 1
     assert items[-1]["sender_id"] == "web-u1"
+
+
+
+def test_telegram_webhook_secret_rejected_when_invalid(monkeypatch) -> None:
+    from src.main import settings
+
+    monkeypatch.setattr(settings, "telegram_webhook_secret", "secret-123")
+    response = client.post("/chat/telegram", json={"text": "hi", "from": {"id": "u1"}})
+    assert response.status_code == 401
+
+    ok = client.post(
+        "/chat/telegram",
+        json={"text": "hi", "from": {"id": "u1"}},
+        headers={"x-telegram-bot-api-secret-token": "secret-123"},
+    )
+    assert ok.status_code == 200
+
+    monkeypatch.setattr(settings, "telegram_webhook_secret", "")

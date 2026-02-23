@@ -2,8 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
+
+
+DEFAULT_BUDGET_POLICY: dict[str, Any] = {
+    "tiers": {
+        "tier_1": {"models": ["openai/gpt-4o-mini"], "max_tokens": 400, "cost_per_1k_tokens": 0.0001},
+        "tier_2": {"models": ["openai/gpt-4.1-mini"], "max_tokens": 800, "cost_per_1k_tokens": 0.001},
+        "tier_3": {"models": ["openai/gpt-4.1"], "max_tokens": 1500, "cost_per_1k_tokens": 0.005},
+    },
+    "daily_cap_usd": 2.0,
+}
 
 
 @dataclass
@@ -14,8 +25,16 @@ class BudgetSelection:
 
 class BudgetAgent:
     def __init__(self, policy_path: Path = Path("configs/policies/budget.yaml")) -> None:
-        raw = yaml.safe_load(policy_path.read_text(encoding="utf-8")) or {}
-        self.tiers = raw.get("tiers", {})
+        raw: dict[str, Any] = DEFAULT_BUDGET_POLICY
+        try:
+            loaded = yaml.safe_load(policy_path.read_text(encoding="utf-8")) or {}
+            if isinstance(loaded, dict):
+                raw = {**DEFAULT_BUDGET_POLICY, **loaded}
+                raw["tiers"] = {**DEFAULT_BUDGET_POLICY["tiers"], **(loaded.get("tiers") or {})}
+        except (FileNotFoundError, OSError, yaml.YAMLError):
+            raw = DEFAULT_BUDGET_POLICY
+
+        self.tiers = raw.get("tiers", DEFAULT_BUDGET_POLICY["tiers"])
         self.daily_cap = float(raw.get("daily_cap_usd", 2.0))
         self._daily_spend = 0.0
 
